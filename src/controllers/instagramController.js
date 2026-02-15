@@ -40,9 +40,17 @@ exports.handleMessage = async (req, res) => {
     const messageText = messaging.message.text;
     const isEcho = messaging.message?.is_echo;
     const selfIgId = process.env.IG_BUSINESS_ID;
+    const selfAppScopedIds = (process.env.IG_APP_SCOPED_USER_IDS || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
 
     // Ignore messages sent by our own Instagram account or echo events
-    if (isEcho || (selfIgId && userId === selfIgId)) {
+    if (
+      isEcho ||
+      (selfIgId && userId === selfIgId) ||
+      (selfAppScopedIds.length > 0 && selfAppScopedIds.includes(userId))
+    ) {
       return;
     }
 
