@@ -18,6 +18,7 @@ class ConversationState {
       patientGoal: null,
       wantsGuidance: null,
       willBook: null,
+      others: null,
       experienceLevel: null,
       goal: null,
       willingWebinar: null,
@@ -44,6 +45,7 @@ class ConversationState {
     this.loadedFromSheet = false;
     this.loadedOnce = false;
     this.flow = null;
+    this.patientTrack = null; // "diabetes" | "other"
     this.followups = "";
   }
 

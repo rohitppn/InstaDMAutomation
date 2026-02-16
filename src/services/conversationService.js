@@ -177,6 +177,7 @@ const syncPatient = async (session, userId, overrides = {}) => {
     willBook: session.memory.willBook,
     timeDate: session.linkSentAt || "",
     followups: session.followups || "",
+    others: session.memory.others,
     ...overrides,
   });
 };
@@ -312,9 +313,11 @@ const loadExisting = async (session, userId) => {
       patientGoal: row[10] || null,
       wantsGuidance: row[11] || null,
       willBook: row[12] || null,
+      others: row[15] || null,
     };
     session.linkSentAt = row[13] || null;
     session.followups = row[14] || "";
+    session.patientTrack = row[15] ? "other" : "diabetes";
     session.contactConfirmed = true;
     return true;
   }
@@ -375,47 +378,62 @@ exports.processMessage = async (userId, message) => {
     if (session.lastQuestion !== "flow_choice") {
       session.lastQuestion = "flow_choice";
       return (
-        "Hi 👋\n" +
-        "Welcome to Kaizen Diabetes Clinic & Academy\n\n" +
-        "We help people in 2 ways:\n\n" +
-        "🩺 Diabetes Reversal & Management\n" +
-        "Through Nutrition + Lifestyle + Holistic protocols\n\n" +
-        "🎓 Diabetes Management Training\n" +
-        "For Nutritionists, Coaches & Health Professionals\n\n" +
-        "To guide you better, please choose one option:\n\n" +
-        "1️⃣ I want help with Diabetes\n" +
-        "2️⃣ I want to Learn Diabetes Management\n\n" +
-        "Just reply 1 or 2 😊"
+        "Hello 👋\n" +
+        "Welcome to Dr. Ruchita Mehta  - Clinic & Academy\n" +
+        "We are glad you connected 💙\n" +
+        "Please let us know how we can support you:\n" +
+        "1. Diabetes care\n" +
+        "2. Other health concerns like thyroid, obesity, pcos etc\n" +
+        "3. Professional certification (Diabetes Coach Program)\n\n" +
+        "Reply with your choice 🙂"
       );
     }
   }
 
   // Decide flow after contact confirmation
-    if (session.lastQuestion === "flow_choice") {
-      const trimmed = message.trim();
-      if (trimmed === "1") {
-        session.flow = "patient";
-        session.update({ profession: "Patient" });
-        session.contactConfirmed = false;
-        session.memory.name = null;
-        session.memory.email = null;
-        session.memory.whatsapp = null;
-        session.memory.age = null;
-      } else if (trimmed === "2") {
-        session.flow = "student";
-        session.update({ profession: "Student" });
-        session.contactConfirmed = false;
-        session.memory.name = null;
-        session.memory.email = null;
-        session.memory.whatsapp = null;
-        session.memory.age = null;
-      } else {
-        return "Please reply 1 or 2.";
-      }
+  if (session.lastQuestion === "flow_choice") {
+    const trimmed = message.trim();
+    if (trimmed === "1") {
+      session.flow = "patient";
+      session.patientTrack = "diabetes";
+      session.update({ profession: "Patient" });
+      session.contactConfirmed = false;
+      session.memory.name = null;
+      session.memory.email = null;
+      session.memory.whatsapp = null;
+      session.memory.age = null;
+      session.memory.others = null;
+    } else if (trimmed === "2") {
+      session.flow = "patient";
+      session.patientTrack = "other";
+      session.update({ profession: "Patient" });
+      session.contactConfirmed = false;
+      session.memory.name = null;
+      session.memory.email = null;
+      session.memory.whatsapp = null;
+      session.memory.age = null;
+      session.memory.others = null;
+      session.memory.diabetic = null;
+      session.memory.diabetesType = null;
+      session.memory.diabetesYears = null;
+      session.memory.sugarValues = null;
+      session.memory.onInsulin = null;
+      session.memory.patientGoal = null;
+    } else if (trimmed === "3") {
+      session.flow = "student";
+      session.update({ profession: "Student" });
+      session.contactConfirmed = false;
+      session.memory.name = null;
+      session.memory.email = null;
+      session.memory.whatsapp = null;
+      session.memory.age = null;
+    } else {
+      return "Please reply 1, 2, or 3.";
     }
+  }
 
   if (!session.flow) {
-    return "Please reply 1 or 2.";
+    return "Please reply 1, 2, or 3.";
   }
 
   if (session.flow === "student") {
@@ -643,9 +661,22 @@ exports.processMessage = async (userId, message) => {
       willBook: session.memory.willBook,
       timeDate: session.linkSentAt || "",
       followups: session.followups || "",
+      others: session.memory.others,
     });
     session.sheetRow = row;
     session.savedToSheet = true;
+  }
+
+  if (session.patientTrack === "other") {
+    if (session.lastQuestion === "other_problem") {
+      session.memory.others = message.trim();
+      await syncPatient(session, userId, { others: session.memory.others });
+    }
+
+    if (!session.memory.others) {
+      session.lastQuestion = "other_problem";
+      return "Please briefly describe your health concern.";
+    }
   }
 
   if (session.lastQuestion === "diabetic") {
@@ -659,7 +690,7 @@ exports.processMessage = async (userId, message) => {
     await syncPatient(session, userId, { diabetic: session.memory.diabetic });
   }
 
-  if (!session.memory.diabetic) {
+  if (session.patientTrack !== "other" && !session.memory.diabetic) {
     session.lastQuestion = "diabetic";
     return "Are you diabetic?";
   }
@@ -669,7 +700,7 @@ exports.processMessage = async (userId, message) => {
     await syncPatient(session, userId, { diabetesType: session.memory.diabetesType });
   }
 
-  if (session.memory.diabetic === "Yes" && !session.memory.diabetesType) {
+  if (session.patientTrack !== "other" && session.memory.diabetic === "Yes" && !session.memory.diabetesType) {
     session.lastQuestion = "diabetes_type";
     return "Which type of Diabetes? (Type 1 / Type 2 / Prediabetes / Gestational)";
   }
@@ -679,7 +710,7 @@ exports.processMessage = async (userId, message) => {
     await syncPatient(session, userId, { diabetesYears: session.memory.diabetesYears });
   }
 
-  if (session.memory.diabetic === "Yes" && !session.memory.diabetesYears) {
+  if (session.patientTrack !== "other" && session.memory.diabetic === "Yes" && !session.memory.diabetesYears) {
     session.lastQuestion = "diabetes_years";
     return "Since how many years?";
   }
@@ -691,7 +722,7 @@ exports.processMessage = async (userId, message) => {
     await syncPatient(session, userId, { diabetic: diabeticField });
   }
 
-  if (session.memory.diabetic === "Yes" && !session.memory.sugarValues) {
+  if (session.patientTrack !== "other" && session.memory.diabetic === "Yes" && !session.memory.sugarValues) {
     session.lastQuestion = "sugar_values";
     return "Latest Fasting & PP sugar values (if available)";
   }
@@ -703,9 +734,14 @@ exports.processMessage = async (userId, message) => {
     await syncPatient(session, userId, { onInsulin: session.memory.onInsulin });
   }
 
-  if (session.memory.diabetic === "Yes" && !session.memory.onInsulin) {
+  if (session.patientTrack !== "other" && session.memory.diabetic === "Yes" && !session.memory.onInsulin) {
     session.lastQuestion = "on_insulin";
     return "Are you on insulin or tablets? (Yes/No)";
+  }
+
+  if (session.patientTrack === "other" && !session.memory.patientGoal) {
+    session.memory.patientGoal = "Other health concern";
+    await syncPatient(session, userId, { patientGoal: session.memory.patientGoal });
   }
 
   if (session.lastQuestion === "patient_goal") {
@@ -718,7 +754,7 @@ exports.processMessage = async (userId, message) => {
     }
   }
 
-  if (!session.memory.patientGoal) {
+  if (!session.memory.patientGoal && session.patientTrack !== "other") {
     session.lastQuestion = "patient_goal";
     return (
       "What is your main goal right now?\n" +

@@ -171,6 +171,7 @@ exports.appendPatient = async ({
   willBook,
   timeDate,
   followups,
+  others,
 }) =>
   appendRow({
     sheetName: "Sheet2",
@@ -190,6 +191,7 @@ exports.appendPatient = async ({
       willBook,
       timeDate,
       followups,
+      others,
     ],
   });
 
@@ -210,11 +212,12 @@ exports.updatePatient = async ({
   willBook,
   timeDate,
   followups,
+  others,
 }) =>
   updateRow({
     sheetName: "Sheet2",
     row,
-    lastColumn: "O",
+    lastColumn: "P",
     values: [
       id,
       name,
@@ -231,7 +234,8 @@ exports.updatePatient = async ({
       willBook,
       timeDate,
       followups,
+      others,
     ],
   });
 
-exports.getPatientById = async ({ id }) => getById({ sheetName: "Sheet2", lastColumn: "O", id });
+exports.getPatientById = async ({ id }) => getById({ sheetName: "Sheet2", lastColumn: "P", id });
