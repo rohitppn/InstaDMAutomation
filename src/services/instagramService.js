@@ -6,7 +6,7 @@ const ACCESS_TOKEN =
 const IG_BUSINESS_ID = process.env.IG_BUSINESS_ID;
 const USE_INSTAGRAM_LOGIN = process.env.IG_USE_INSTAGRAM_LOGIN === "true";
 
-exports.sendMessage = async ({ recipientId, text }) => {
+exports.sendMessage = async ({ recipientId, text, quickReplies }) => {
   if (!ACCESS_TOKEN) {
     throw new Error("Missing Instagram access token");
   }
@@ -19,9 +19,14 @@ exports.sendMessage = async ({ recipientId, text }) => {
     ? `${GRAPH_API}/me/messages`
     : `${GRAPH_API}/${IG_BUSINESS_ID}/messages`;
 
+  const message = { text };
+  if (Array.isArray(quickReplies) && quickReplies.length > 0) {
+    message.quick_replies = quickReplies;
+  }
+
   const payload = {
     recipient: { id: recipientId },
-    message: { text },
+    message,
   };
 
   try {

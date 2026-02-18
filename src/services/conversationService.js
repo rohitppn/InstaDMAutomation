@@ -20,6 +20,17 @@ const getPatientLink = () =>
 
 const nowIso = () => new Date().toISOString();
 
+const replyWithQuickReplies = (text, options) => ({
+  text,
+  quickReplies: options.map((option) => ({
+    content_type: "text",
+    title: option,
+    payload: option,
+  })),
+});
+
+const replyYesNo = (text) => replyWithQuickReplies(text, ["Yes", "No"]);
+
 const extractEmail = (text) => {
   const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   return match ? match[0].toLowerCase() : null;
@@ -377,15 +388,16 @@ exports.processMessage = async (userId, message) => {
   if (!session.flow) {
     if (session.lastQuestion !== "flow_choice") {
       session.lastQuestion = "flow_choice";
-      return (
+      return replyWithQuickReplies(
         "Hello 👋\n" +
-        "Welcome to Dr. Ruchita Mehta  - Clinic & Academy\n" +
-        "We are glad you connected 💙\n" +
-        "Please let us know how we can support you:\n" +
-        "1. Diabetes care\n" +
-        "2. Other health concerns like thyroid, obesity, pcos etc\n" +
-        "3. Professional certification (Diabetes Coach Program)\n\n" +
-        "Reply with your choice 🙂"
+          "Welcome to Dr. Ruchita Mehta  - Clinic & Academy\n" +
+          "We are glad you connected 💙\n" +
+          "Please let us know how we can support you:\n" +
+          "1. Diabetes care\n" +
+          "2. Other health concerns like thyroid, obesity, pcos etc\n" +
+          "3. Professional certification (Diabetes Coach Program)\n\n" +
+          "Reply with your choice 🙂",
+        ["1", "2", "3"],
       );
     }
   }
@@ -428,12 +440,12 @@ exports.processMessage = async (userId, message) => {
       session.memory.whatsapp = null;
       session.memory.age = null;
     } else {
-      return "Please reply 1, 2, or 3.";
+        return replyWithQuickReplies("Please reply 1, 2, or 3.", ["1", "2", "3"]);
     }
   }
 
   if (!session.flow) {
-    return "Please reply 1, 2, or 3.";
+    return replyWithQuickReplies("Please reply 1, 2, or 3.", ["1", "2", "3"]);
   }
 
   if (session.flow === "student") {
@@ -473,13 +485,13 @@ exports.processMessage = async (userId, message) => {
         }
 
         session.lastQuestion = "confirm_contact_student";
-        return (
+        return replyYesNo(
           `Thanks! Please confirm:\n` +
-          `Name: ${session.memory.name}\n` +
-          `Email: ${session.memory.email}\n` +
-          `WhatsApp: ${session.memory.whatsapp}\n` +
-          `Age: ${session.memory.age}\n` +
-          `Is this correct? (Yes/No)`
+            `Name: ${session.memory.name}\n` +
+            `Email: ${session.memory.email}\n` +
+            `WhatsApp: ${session.memory.whatsapp}\n` +
+            `Age: ${session.memory.age}\n` +
+            `Is this correct? (Yes/No)`,
         );
       }
     }
@@ -516,13 +528,14 @@ exports.processMessage = async (userId, message) => {
 
   if (!session.memory.experienceLevel) {
     session.lastQuestion = "experience_level";
-    return (
+    return replyWithQuickReplies(
       "Great 👍\n" +
-      "Which best describes you?\n" +
-      "A) Beginner – No diabetes coaching experience\n" +
-      "B) Some experience but not confident\n" +
-      "C) Already seeing diabetes clients\n" +
-      "D) Just exploring"
+        "Which best describes you?\n" +
+        "A) Beginner – No diabetes coaching experience\n" +
+        "B) Some experience but not confident\n" +
+        "C) Already seeing diabetes clients\n" +
+        "D) Just exploring",
+      ["A", "B", "C", "D"],
     );
   }
 
@@ -538,27 +551,28 @@ exports.processMessage = async (userId, message) => {
 
   if (!session.memory.goal) {
     session.lastQuestion = "goal";
-    return (
+    return replyWithQuickReplies(
       "What is your main goal from this training?\n" +
-      "A) Become Diabetes Educator\n" +
-      "B) Start own practice\n" +
-      "C) Increase income\n" +
-      "D) Help more patients\n" +
-      "E) All of the above"
+        "A) Become Diabetes Educator\n" +
+        "B) Start own practice\n" +
+        "C) Increase income\n" +
+        "D) Help more patients\n" +
+        "E) All of the above",
+      ["A", "B", "C", "D", "E"],
     );
   }
     if (!session.webinarAsked) {
       session.webinarAsked = true;
       session.lastQuestion = "webinar_intent";
-      return (
+      return replyYesNo(
         "Amazing 🙌\n" +
-        "I am hosting a Free Live Webinar where I will reveal:\n" +
-        "✅ The 5 Biggest Gaps – Why you are not getting best results in diabetes cases\n" +
-        "✅ The 3D Method I personally use for sugar control\n" +
-        "✅ Why sugar is not dropping even after diet & medicines\n" +
-        "✅ How to start getting consistent results in your diabetes clients\n" +
-        "Would you like to attend this webinar?\n" +
-        "Reply YES to get details."
+          "I am hosting a Free Live Webinar where I will reveal:\n" +
+          "✅ The 5 Biggest Gaps – Why you are not getting best results in diabetes cases\n" +
+          "✅ The 3D Method I personally use for sugar control\n" +
+          "✅ Why sugar is not dropping even after diet & medicines\n" +
+          "✅ How to start getting consistent results in your diabetes clients\n" +
+          "Would you like to attend this webinar?\n" +
+          "Reply YES to get details."
       );
     }
 
@@ -633,13 +647,13 @@ exports.processMessage = async (userId, message) => {
       }
 
       session.lastQuestion = "confirm_contact_patient";
-      return (
+      return replyYesNo(
         `Thanks! Please confirm:\n` +
-        `Name: ${session.memory.name}\n` +
-        `Email: ${session.memory.email}\n` +
-        `WhatsApp: ${session.memory.whatsapp}\n` +
-        `Age: ${session.memory.age}\n` +
-        `Is this correct? (Yes/No)`
+          `Name: ${session.memory.name}\n` +
+          `Email: ${session.memory.email}\n` +
+          `WhatsApp: ${session.memory.whatsapp}\n` +
+          `Age: ${session.memory.age}\n` +
+          `Is this correct? (Yes/No)`
       );
     }
   }
@@ -692,7 +706,7 @@ exports.processMessage = async (userId, message) => {
 
   if (session.patientTrack !== "other" && !session.memory.diabetic) {
     session.lastQuestion = "diabetic";
-    return "Are you diabetic?";
+    return replyYesNo("Are you diabetic?");
   }
 
   if (session.lastQuestion === "diabetes_type") {
@@ -736,7 +750,7 @@ exports.processMessage = async (userId, message) => {
 
   if (session.patientTrack !== "other" && session.memory.diabetic === "Yes" && !session.memory.onInsulin) {
     session.lastQuestion = "on_insulin";
-    return "Are you on insulin or tablets? (Yes/No)";
+    return replyYesNo("Are you on insulin or tablets? (Yes/No)");
   }
 
   if (session.patientTrack === "other" && !session.memory.patientGoal) {
@@ -756,13 +770,14 @@ exports.processMessage = async (userId, message) => {
 
   if (!session.memory.patientGoal && session.patientTrack !== "other") {
     session.lastQuestion = "patient_goal";
-    return (
+    return replyWithQuickReplies(
       "What is your main goal right now?\n" +
-      "A) Reduce medicines\n" +
-      "B) Better sugar control\n" +
-      "C) Weight loss\n" +
-      "D) Complication prevention\n" +
-      "E) All of the above"
+        "A) Reduce medicines\n" +
+        "B) Better sugar control\n" +
+        "C) Weight loss\n" +
+        "D) Complication prevention\n" +
+        "E) All of the above",
+      ["A", "B", "C", "D", "E"],
     );
   }
   if (session.lastQuestion === "guidance") {

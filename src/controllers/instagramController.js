@@ -59,10 +59,15 @@ exports.handleMessage = async (req, res) => {
     // 🧠 Process conversation
     const reply = await conversationService.processMessage(userId, messageText);
 
-    console.log("🤖 Bot reply:", reply);
+    const replyText = typeof reply === "string" ? reply : reply?.text;
+    console.log("🤖 Bot reply:", replyText);
 
     // 📤 Send reply back to Instagram
-    await sendMessage({ recipientId: userId, text: reply });
+    await sendMessage({
+      recipientId: userId,
+      text: replyText,
+      quickReplies: typeof reply === "string" ? undefined : reply?.quickReplies,
+    });
   } catch (error) {
     console.error("🔥 Webhook handling error:", error);
   }
