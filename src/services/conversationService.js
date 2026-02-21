@@ -30,6 +30,8 @@ const replyWithQuickReplies = (text, options) => ({
 });
 
 const replyYesNo = (text) => replyWithQuickReplies(text, ["Yes", "No"]);
+const replyDiabetesTypes = (text) =>
+  replyWithQuickReplies(text, ["Type 1", "Type 2", "Prediabetes", "Gestational"]);
 
 const extractEmail = (text) => {
   const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
@@ -409,6 +411,7 @@ exports.processMessage = async (userId, message) => {
       session.flow = "patient";
       session.patientTrack = "diabetes";
       session.update({ profession: "Patient" });
+      session.memory.diabetic = "Yes";
       session.contactConfirmed = false;
       session.memory.name = null;
       session.memory.email = null;
@@ -689,7 +692,7 @@ exports.processMessage = async (userId, message) => {
 
     if (!session.memory.others) {
       session.lastQuestion = "other_problem";
-      return "Please briefly describe your health concern.";
+      return "Please briefly describe your health concern and since how long.";
     }
   }
 
@@ -705,8 +708,8 @@ exports.processMessage = async (userId, message) => {
   }
 
   if (session.patientTrack !== "other" && !session.memory.diabetic) {
-    session.lastQuestion = "diabetic";
-    return replyYesNo("Are you diabetic?");
+    session.memory.diabetic = "Yes";
+    await syncPatient(session, userId, { diabetic: session.memory.diabetic });
   }
 
   if (session.lastQuestion === "diabetes_type") {
@@ -714,9 +717,13 @@ exports.processMessage = async (userId, message) => {
     await syncPatient(session, userId, { diabetesType: session.memory.diabetesType });
   }
 
-  if (session.patientTrack !== "other" && session.memory.diabetic === "Yes" && !session.memory.diabetesType) {
+  if (
+    session.patientTrack !== "other" &&
+    session.memory.diabetic === "Yes" &&
+    !session.memory.diabetesType
+  ) {
     session.lastQuestion = "diabetes_type";
-    return "Which type of Diabetes? (Type 1 / Type 2 / Prediabetes / Gestational)";
+    return replyDiabetesTypes("Which type of Diabetes?");
   }
 
   if (session.lastQuestion === "diabetes_years") {
