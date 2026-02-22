@@ -86,37 +86,6 @@ const getById = async ({ sheetName, lastColumn, id }) => {
   return null;
 };
 
-exports.appendStudent = async ({
-  id,
-  name,
-  age,
-  number,
-  email,
-  profession,
-  experienceLevel,
-  goal,
-  willingWebinar,
-  webinarLink,
-  timeDate,
-  followups,
-}) =>
-  appendRow({
-    sheetName: "Sheet1",
-    values: [
-      id,
-      name,
-      age,
-      number,
-      email,
-      profession,
-      experienceLevel,
-      goal,
-      willingWebinar,
-      webinarLink,
-      timeDate,
-      followups,
-    ],
-  });
 
 exports.updateStudent = async ({
   row,
@@ -132,11 +101,12 @@ exports.updateStudent = async ({
   webinarLink,
   timeDate,
   followups,
+  takeFollowups,
 }) =>
   updateRow({
     sheetName: "Sheet1",
     row,
-    lastColumn: "L",
+    lastColumn: "M",
     values: [
       id,
       name,
@@ -150,10 +120,45 @@ exports.updateStudent = async ({
       webinarLink,
       timeDate,
       followups,
+      takeFollowups,
     ],
   });
 
-exports.getStudentById = async ({ id }) => getById({ sheetName: "Sheet1", lastColumn: "L", id });
+exports.getStudentById = async ({ id }) => getById({ sheetName: "Sheet1", lastColumn: "M", id });
+
+exports.appendStudent = async ({
+  id,
+  name,
+  age,
+  number,
+  email,
+  profession,
+  experienceLevel,
+  goal,
+  willingWebinar,
+  webinarLink,
+  timeDate,
+  followups,
+  takeFollowups,
+}) =>
+  appendRow({
+    sheetName: "Sheet1",
+    values: [
+      id,
+      name,
+      age,
+      number,
+      email,
+      profession,
+      experienceLevel,
+      goal,
+      willingWebinar,
+      webinarLink,
+      timeDate,
+      followups,
+      takeFollowups,
+    ],
+  });
 
 exports.appendPatient = async ({
   id,
@@ -162,16 +167,20 @@ exports.appendPatient = async ({
   number,
   email,
   profession,
-  diabetic,
+  currentMedication,
   diabetesType,
   diabetesYears,
-  onInsulin,
+  sugarValues,
   patientGoal,
-  guidance,
-  willBook,
   timeDate,
   followups,
   others,
+  type1Flag,
+  type1Years,
+  type1SugarValues,
+  type1HighLows,
+  type1Symptoms,
+  takeFollowups,
 }) =>
   appendRow({
     sheetName: "Sheet2",
@@ -182,16 +191,20 @@ exports.appendPatient = async ({
       number,
       email,
       profession,
-      diabetic,
+      currentMedication,
       diabetesType,
       diabetesYears,
-      onInsulin,
+      sugarValues,
       patientGoal,
-      guidance,
-      willBook,
       timeDate,
       followups,
       others,
+      type1Flag,
+      type1Years,
+      type1SugarValues,
+      type1HighLows,
+      type1Symptoms,
+      takeFollowups,
     ],
   });
 
@@ -203,21 +216,25 @@ exports.updatePatient = async ({
   number,
   email,
   profession,
-  diabetic,
+  currentMedication,
   diabetesType,
   diabetesYears,
-  onInsulin,
+  sugarValues,
   patientGoal,
-  guidance,
-  willBook,
   timeDate,
   followups,
   others,
+  type1Flag,
+  type1Years,
+  type1SugarValues,
+  type1HighLows,
+  type1Symptoms,
+  takeFollowups,
 }) =>
   updateRow({
     sheetName: "Sheet2",
     row,
-    lastColumn: "P",
+    lastColumn: "T",
     values: [
       id,
       name,
@@ -225,17 +242,21 @@ exports.updatePatient = async ({
       number,
       email,
       profession,
-      diabetic,
+      currentMedication,
       diabetesType,
       diabetesYears,
-      onInsulin,
+      sugarValues,
       patientGoal,
-      guidance,
-      willBook,
       timeDate,
       followups,
       others,
+      type1Flag,
+      type1Years,
+      type1SugarValues,
+      type1HighLows,
+      type1Symptoms,
+      takeFollowups,
     ],
   });
 
-exports.getPatientById = async ({ id }) => getById({ sheetName: "Sheet2", lastColumn: "P", id });
+exports.getPatientById = async ({ id }) => getById({ sheetName: "Sheet2", lastColumn: "T", id });

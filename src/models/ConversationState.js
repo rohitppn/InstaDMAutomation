@@ -10,6 +10,7 @@ class ConversationState {
       email: null,
       whatsapp: null,
       profession: null,
+      currentMedication: null,
       diabetic: null,
       diabetesType: null,
       diabetesYears: null,
@@ -19,6 +20,12 @@ class ConversationState {
       wantsGuidance: null,
       willBook: null,
       others: null,
+      type1Years: null,
+      type1SugarValues: null,
+      type1HighLows: null,
+      type1Symptoms: null,
+      type1StepIntent: null,
+      takeFollowups: "Yes",
       experienceLevel: null,
       goal: null,
       willingWebinar: null,
@@ -46,6 +53,10 @@ class ConversationState {
     this.loadedOnce = false;
     this.flow = null;
     this.patientTrack = null; // "diabetes" | "other"
+    this.patientOfferSent = false;
+    this.otherOfferSent = false;
+    this.type1Complete = false;
+    this.type1IntroSent = false;
     this.followups = "";
   }
 

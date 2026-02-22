@@ -18,6 +18,16 @@ const getPatientLink = () =>
   process.env["1:1_CONSULT_LINK"] ||
   "https://drruchitamehta.exlyapp.com/checkout/f92410b4-99bf-4da7-8d97-965cff79f1ea";
 
+const getDiabetesWebinarLink = () =>
+  process.env.DIABETES_WEBINAR_LINK ||
+  "https://drruchitamehta.exlyapp.com/checkout/8392be04-0a17-4c40-92a4-9dfc6f418140";
+
+const getType1Link = () =>
+  process.env.TYPE1_LINK ||
+  "https://drruchitamehta.exlyapp.com/checkout/d3b56137-7abc-4ecf-b8b6-5af21a31f3b7";
+
+const getOtherLink = () => process.env.OTHER_LINK || getType1Link();
+
 const nowIso = () => new Date().toISOString();
 
 const replyWithQuickReplies = (text, options) => ({
@@ -89,6 +99,25 @@ const extractName = (text) => {
   return null;
 };
 
+const extractOtherConcern = (text) => {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    if (line.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)) continue;
+    if (line.match(/\d{8,15}/)) continue;
+    if (line.match(/^\d{1,3}$/)) continue;
+    const lower = line.toLowerCase();
+    if (/(patient|student|doctor|nutrition|other)/.test(lower)) continue;
+    if (/^(hi|hello|hey|hlo|hii|hiii)$/i.test(lower)) continue;
+    if (/(med|medicine|tablet|insulin)/.test(lower)) continue;
+    return line;
+  }
+  return null;
+};
+
 const mapExperienceLevel = (text) => {
   const normalized = text.trim().toUpperCase();
   if (normalized.startsWith("A")) return "Beginner – No diabetes coaching experience";
@@ -119,6 +148,17 @@ const mapGoal = (text) => {
   return null;
 };
 
+const mapStudentProfession = (text) => {
+  const lower = text.toLowerCase();
+  if (lower.includes("nutrition")) return "Nutritionist";
+  if (lower.includes("health coach") || lower.includes("coach"))
+    return "Health Coach";
+  if (lower.includes("doctor")) return "Doctor";
+  if (lower.includes("fitness")) return "Fitness Trainer";
+  if (lower.includes("student")) return "Student";
+  return null;
+};
+
 const mapPatientGoal = (text) => {
   const normalized = text.trim().toUpperCase();
   if (normalized.startsWith("A")) return "Reduce medicines";
@@ -135,6 +175,22 @@ const mapPatientGoal = (text) => {
   return null;
 };
 
+const mapType1Goal = (text) => {
+  const normalized = text.trim().toUpperCase();
+  if (normalized.startsWith("A")) return "Better sugar control";
+  if (normalized.startsWith("B")) return "Reduce fluctuations";
+  if (normalized.startsWith("C")) return "Improve energy";
+  if (normalized.startsWith("D")) return "Prevent complications";
+  if (normalized.startsWith("E")) return "All of the above";
+  const lower = text.toLowerCase();
+  if (lower.includes("control")) return "Better sugar control";
+  if (lower.includes("fluct")) return "Reduce fluctuations";
+  if (lower.includes("energy")) return "Improve energy";
+  if (lower.includes("complication")) return "Prevent complications";
+  if (lower.includes("all")) return "All of the above";
+  return null;
+};
+
 const isYes = (text) =>
   /(yes|yess|yep|yeah|yaa|ya|yup|ypp|haan|haa|ha|hmm|sure|correct)/i.test(text);
 const isNo = (text) => /(no|nah|nope|nahi|galat|wrong|not yet|later|not now)/i.test(text);
@@ -145,6 +201,23 @@ const isAck = (text) =>
 const isQuestion = (text) => /[?]/.test(text);
 const isWebinarLinkRequest = (text) =>
   /(webinar|link|register|registration|join)/i.test(text);
+
+const extractMedication = (text) => {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (const line of lines) {
+    if (line.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)) continue;
+    if (line.match(/\d{8,15}/)) continue;
+    if (line.match(/^\d{1,3}$/)) continue;
+    const lower = line.toLowerCase();
+    if (/(patient|student|doctor|nutrition|other)/.test(lower)) continue;
+    if (/^(hi|hello|hey|hlo|hii|hiii)$/i.test(lower)) continue;
+    if (/(med|medicine|tablet|insulin|none|no)/.test(lower)) return line;
+  }
+  return null;
+};
 
 const appendFollowup = (existing, message) => {
   if (!existing) return message;
@@ -167,6 +240,7 @@ const syncStudent = async (session, userId, overrides = {}) => {
     webinarLink: session.webinarLinkSent ? getWebinarLink() : "",
     timeDate: session.linkSentAt || "",
     followups: session.followups || "",
+    takeFollowups: session.memory.takeFollowups || "Yes",
     ...overrides,
   });
 };
@@ -181,103 +255,148 @@ const syncPatient = async (session, userId, overrides = {}) => {
     number: session.memory.whatsapp,
     email: session.memory.email,
     profession: session.memory.profession,
-    diabetic: session.memory.diabetic,
+    currentMedication: session.memory.currentMedication,
     diabetesType: session.memory.diabetesType,
     diabetesYears: session.memory.diabetesYears,
-    onInsulin: session.memory.onInsulin,
+    sugarValues: session.memory.sugarValues,
     patientGoal: session.memory.patientGoal,
-    guidance: session.memory.wantsGuidance,
-    willBook: session.memory.willBook,
     timeDate: session.linkSentAt || "",
     followups: session.followups || "",
     others: session.memory.others,
+    type1Flag: session.memory.diabetesType === "Type 1" ? "Yes" : "",
+    type1Years: session.memory.type1Years,
+    type1SugarValues: session.memory.type1SugarValues,
+    type1HighLows: session.memory.type1HighLows,
+    type1Symptoms: session.memory.type1Symptoms,
+    takeFollowups: session.memory.takeFollowups || "Yes",
     ...overrides,
   });
 };
 
-const scheduleStudentFollowups = (session, userId) => {
-  if (session.followUpScheduled) return;
-  session.followUpScheduled = true;
+const shouldSendFollowups = (session) =>
+  String(session.memory.takeFollowups || "Yes").toLowerCase() !== "no";
 
-  const follow1 =
-    "Hi 🙂 Bas follow‑up kar rahi hoon. Webinar me jo clarity milegi, woh practice grow karne me help karegi. Jab ready ho, link se register kar sakte ho.";
-  const follow2 =
-    "Ek chhota sa question 🙂 Is training se aapka main focus kya hai—results improve karna, practice grow karna, ya certification?";
-  const follow3 =
-    "Hi 👋 Ye last follow‑up hai. Jab bhi ready ho, webinar join karna helpful rahega. Take care 🙂";
+const scheduleFollowups = async ({
+  session,
+  userId,
+  follow1,
+  follow2,
+  follow3,
+  syncFn,
+}) => {
+  if (!shouldSendFollowups(session) || session.followUpScheduled) return;
+  session.followUpScheduled = true;
 
   setTimeout(async () => {
     try {
       await sendMessage({ recipientId: userId, text: follow1 });
       session.followups = appendFollowup(session.followups, follow1);
-      await syncStudent(session, userId, { followups: session.followups });
+      await syncFn(session, userId, { followups: session.followups });
     } catch (err) {
-      console.error("❌ Student follow-up error:", err.message);
-    }
-  }, 12 * 60 * 60 * 1000);
-
-  setTimeout(async () => {
-    try {
-      await sendMessage({ recipientId: userId, text: follow2 });
-      session.followups = appendFollowup(session.followups, follow2);
-      await syncStudent(session, userId, { followups: session.followups });
-    } catch (err) {
-      console.error("❌ Student follow-up error:", err.message);
+      console.error("❌ Follow-up error:", err.message);
     }
   }, 24 * 60 * 60 * 1000);
 
   setTimeout(async () => {
     try {
-      await sendMessage({ recipientId: userId, text: follow3 });
-      session.followups = appendFollowup(session.followups, follow3);
-      await syncStudent(session, userId, { followups: session.followups });
-    } catch (err) {
-      console.error("❌ Student follow-up error:", err.message);
-    }
-  }, 48 * 60 * 60 * 1000);
-};
-
-const schedulePatientFollowups = (session, userId) => {
-  if (session.followUpScheduled) return;
-  session.followUpScheduled = true;
-
-  const follow1 =
-    "Hi 🙂 Bas follow‑up kar rahi hoon. Diabetes har body mein different behave karta hai. Bina details dekhe generic advice dena ethically sahi nahi lagta. Assessment se clarity milti hai.";
-  const follow2 =
-    "Ek chhota sa question 🙂 Aapka main concern kya hai? 1️⃣ Fasting sugar 2️⃣ Post‑meal spikes 3️⃣ HbA1c 4️⃣ Weight/tiredness 5️⃣ Medicines badh rahi hain";
-  const follow3 =
-    "Hi 👋 Ye last message hai. Jitni jaldi clarity mile, utni unnecessary medicines aur frustration avoid hoti hai. Jab ready ho, message kar dena. Take care 🙂";
-
-  setTimeout(async () => {
-    try {
-      await sendMessage({ recipientId: userId, text: follow1 });
-      session.followups = appendFollowup(session.followups, follow1);
-      await syncPatient(session, userId, { followups: session.followups });
-    } catch (err) {
-      console.error("❌ Patient follow-up error:", err.message);
-    }
-  }, 12 * 60 * 60 * 1000);
-
-  setTimeout(async () => {
-    try {
       await sendMessage({ recipientId: userId, text: follow2 });
       session.followups = appendFollowup(session.followups, follow2);
-      await syncPatient(session, userId, { followups: session.followups });
+      await syncFn(session, userId, { followups: session.followups });
     } catch (err) {
-      console.error("❌ Patient follow-up error:", err.message);
+      console.error("❌ Follow-up error:", err.message);
     }
-  }, 24 * 60 * 60 * 1000);
+  }, 48 * 60 * 60 * 1000);
 
   setTimeout(async () => {
     try {
       await sendMessage({ recipientId: userId, text: follow3 });
       session.followups = appendFollowup(session.followups, follow3);
-      await syncPatient(session, userId, { followups: session.followups });
+      await syncFn(session, userId, { followups: session.followups });
     } catch (err) {
-      console.error("❌ Patient follow-up error:", err.message);
+      console.error("❌ Follow-up error:", err.message);
     }
-  }, 48 * 60 * 60 * 1000);
+  }, 72 * 60 * 60 * 1000);
 };
+
+const scheduleStudentFollowups = (session, userId) =>
+  scheduleFollowups({
+    session,
+    userId,
+    syncFn: syncStudent,
+    follow1:
+      "Hello 👋\n\nYou had earlier shown interest in learning how to handle diabetes clients confidently.\n\nI’m conducting a free live training webinar where I’ll explain:\n\n✔ Why sugars don’t drop even with good diet\n✔ How to decode blood reports\n✔ How to become a Diabetes Coach\n\n🗓 Monday | 6:00 PM IST\n📍 Live on Zoom\nRegister here:\n👉 " +
+      getWebinarLink(),
+    follow2:
+      "Hi 😊\n\nI noticed you showed interest in the FREE Diabetes Educator Webinar, but your seat isn’t confirmed yet.\n\nThis session is specifically designed for Nutritionists & Health Coaches who want better results in diabetes cases.\n\nYou’ll learn:\n🔥 Why most coaches struggle despite diet plans\n🔥 My proven 3D diabetes system\n🔥 Step-by-step patient protocol\n🔥 Real case examples from practice\n\nSeats are limited per Monday batch.\n\n👉 Here’s the registration link to confirm your seat:\n\n" +
+      getWebinarLink() +
+      "\n\n– Dr. Ruchita Mehta",
+    follow3:
+      "Hello 😊\n\nLooking forward to seeing you in the Live Webinar on Monday at 6 PM.\n\nMake sure your seat is confirmed here:\n🔗 " +
+      getWebinarLink() +
+      "\n\nSee you live.",
+  });
+
+const scheduleType2Followups = (session, userId) =>
+  scheduleFollowups({
+    session,
+    userId,
+    syncFn: syncPatient,
+    follow1:
+      "Hello 😊\n\nJust checking in, aapne Diabetes support ke liye enquiry ki thi but abhi tak next step nahi liya.\n\nAgar aap sugar levels naturally manage / reverse karna chahte ho, we have 2 ways to help you 👇\n\n🩺 1:1 Personal Consultation\nCustomized diet + lifestyle plan\n👉 Book here:\n" +
+      getPatientLink() +
+      "\n\n🎓 FREE Diabetes Webinar\nLearn how to control Diabetes naturally\n👉 Join free here:\n" +
+      getDiabetesWebinarLink() +
+      "\n\nReply CALL or WEBINAR — we’ll guide you 😊",
+    follow2:
+      "Hi 👋\n\nDiabetes ko manage karna confusing lag sakta hai — what to eat, what to avoid, medicines ka kya karein?\n\nIsliye we offer 2 support options 💙\n\n🔹 1:1 Consultation\nPersonal case analysis + diet plan + medicine reduction support\n\n🔹 FREE Webinar\nStep-by-step Diabetes management guidance\n\nChoose what suits you 👇\n\n👉 Book Consultation:\n" +
+      getPatientLink() +
+      "\n\n👉 Join Webinar:\n" +
+      getDiabetesWebinarLink(),
+    follow3:
+      "Final reminder 😊\n\nAgar aap serious ho Diabetes control / reversal ko lekar — don’t delay your action ⏳\n\nStart with learning or go personal — choice is yours 👇\n\n🩺 Book 1:1 Consultation\nGet personalized plan & doctor guidance\n" +
+      getPatientLink() +
+      "\n\n🎓 Join FREE Webinar\nUnderstand root cause & natural management\n" +
+      getDiabetesWebinarLink() +
+      "\n\nReply START — team will assist you 👍",
+  });
+
+const scheduleType1Followups = (session, userId) =>
+  scheduleFollowups({
+    session,
+    userId,
+    syncFn: syncPatient,
+    follow1:
+      "Hi 🙂 Just checking in 💙\n\nI didn’t see your appointment booking yet, and I don’t want you to miss the chance to start stabilizing your sugars properly.\n\nType 1 management becomes much easier when you follow the right structure and timing plan 🙏\n\nIf better control and stable energy is your goal, let’s take the first step 👇\n🔗 " +
+      getType1Link() +
+      "\n\nLet me know if you need any help booking 🙂",
+    follow2:
+      "Hi again 💙\n\nJust a gentle reminder — fluctuating sugars for long periods can affect energy, mood, and long-term health.\n\nThe sooner we structure your nutrition and insulin timing correctly, the smoother your daily readings can become 🙂\n\nIf you’re serious about improving stability, you can secure your consultation here 👇\n🔗 " +
+      getType1Link() +
+      "\n\nReply “BOOKED” once done, and we’ll guide you with next steps 🙏",
+    follow3:
+      "Hi 💙\nI’ll close this support thread for now so we don’t keep disturbing you 🙏\n\nBut if managing Type 1 feels overwhelming or your sugars are still unstable, remember — you don’t have to figure it out alone.\n\nStructured guidance can truly change daily control and confidence.\nWhenever you’re ready, you can book here 👇\n🔗 " +
+      getType1Link() +
+      "\n\nWe’re here to support you 💙",
+  });
+
+const scheduleOtherFollowups = (session, userId) =>
+  scheduleFollowups({
+    session,
+    userId,
+    syncFn: syncPatient,
+    follow1:
+      "Hi 🙂\nJust checking in with you regarding your health concern 💙\n\nSometimes we get busy and delay prioritising our health — but early guidance can prevent things from getting more complicated later.\n\nA personalised 1:1 consultation will help us deeply analyse your case and create a clear, structured recovery plan ✨\nYou can book your session here 👇\n🔗 " +
+      getOtherLink() +
+      "\n\nLet me know if you have any questions before booking 🙂",
+    follow2:
+      "Hi again 🙂\nJust a gentle reminder 💙\n\nHealth concerns often need a root-cause approach — not just temporary symptom relief.\n\nIn your consultation, Dr. Ruchita will:\n✔️ Understand your complete health history\n✔️ Analyse reports (if available)\n✔️ Identify root triggers\n✔️ Create a practical diet & lifestyle roadmap\n\nYou can secure your slot here 👇\n🔗 " +
+      getOtherLink() +
+      "\n\nWe’ll guide you with next steps once booked ✨",
+    follow3:
+      "Hi 🙂\nWe don’t want to disturb you further, so we’ll pause the follow-ups for now 💙\n\nWhenever you feel ready to work on your health in a structured and guided way, we’re here to support you.\n\nYou can book your consultation anytime here 👇\n🔗 " +
+      getOtherLink() +
+      "\n\nWishing you good health and balance always 🌿",
+  });
 
 const loadExisting = async (session, userId) => {
   const student = await googleSheetsService.getStudentById({ id: userId });
@@ -297,6 +416,7 @@ const loadExisting = async (session, userId) => {
       experienceLevel: row[6] || null,
       goal: row[7] || null,
       willingWebinar: row[8] || null,
+      takeFollowups: row[12] || "Yes",
     };
     session.linkSentAt = row[10] || null;
     session.webinarLinkSent = Boolean(row[9]);
@@ -319,18 +439,21 @@ const loadExisting = async (session, userId) => {
       whatsapp: row[3] || null,
       email: row[4] || null,
       profession: row[5] || null,
-      diabetic: row[6] || null,
+      currentMedication: row[6] || null,
       diabetesType: row[7] || null,
       diabetesYears: row[8] || null,
-      onInsulin: row[9] || null,
+      sugarValues: row[9] || null,
       patientGoal: row[10] || null,
-      wantsGuidance: row[11] || null,
-      willBook: row[12] || null,
-      others: row[15] || null,
+      others: row[13] || null,
+      type1Years: row[15] || null,
+      type1SugarValues: row[16] || null,
+      type1HighLows: row[17] || null,
+      type1Symptoms: row[18] || null,
+      takeFollowups: row[19] || "Yes",
     };
-    session.linkSentAt = row[13] || null;
-    session.followups = row[14] || "";
-    session.patientTrack = row[15] ? "other" : "diabetes";
+    session.linkSentAt = row[11] || null;
+    session.followups = row[12] || "";
+    session.patientTrack = row[13] ? "other" : "diabetes";
     session.contactConfirmed = true;
     return true;
   }
@@ -384,6 +507,16 @@ exports.processMessage = async (userId, message) => {
     }
     const extractedName = extractName(message);
     if (extractedName) session.update({ name: extractedName });
+
+    if (session.flow === "patient" && !session.memory.currentMedication) {
+      const extractedMedication = extractMedication(message);
+      if (extractedMedication) session.update({ currentMedication: extractedMedication });
+    }
+
+    if (session.flow === "patient" && session.patientTrack === "other" && !session.memory.others) {
+      const extractedOther = extractOtherConcern(message);
+      if (extractedOther) session.update({ others: extractedOther });
+    }
   }
 
   // Flow choice first
@@ -391,12 +524,12 @@ exports.processMessage = async (userId, message) => {
     if (session.lastQuestion !== "flow_choice") {
       session.lastQuestion = "flow_choice";
       return replyWithQuickReplies(
-        "Hello 👋\n" +
-          "Welcome to Dr. Ruchita Mehta  - Clinic & Academy\n" +
-          "We are glad you connected 💙\n" +
-          "Please let us know how we can support you:\n" +
+        "Hello 👋\n\n" +
+          "Welcome to Dr. Ruchita Mehta  - Clinic & Academy\n\n" +
+          "We are glad you connected 💙\n\n" +
+          "Please let us know how we can support you:\n\n" +
           "1. Diabetes care\n" +
-          "2. Other health concerns like thyroid, obesity, pcos etc\n" +
+          "2. Other health concerns like thyroid, obesity\n" +
           "3. Professional certification (Diabetes Coach Program)\n\n" +
           "Reply with your choice 🙂",
         ["1", "2", "3"],
@@ -499,7 +632,28 @@ exports.processMessage = async (userId, message) => {
       }
     }
 
-    // Save student row after confirmation
+    if (session.lastQuestion === "student_profession") {
+      const mapped = mapStudentProfession(message);
+      if (mapped) {
+        session.update({ profession: mapped });
+        await syncStudent(session, userId, { profession: mapped });
+      } else {
+        return replyWithQuickReplies(
+          "Please select your profession:",
+          ["Nutritionist", "Health Coach", "Doctor", "Fitness Trainer", "Student"],
+        );
+      }
+    }
+
+    if (!session.memory.profession) {
+      session.lastQuestion = "student_profession";
+      return replyWithQuickReplies(
+        "Please select your profession:",
+        ["Nutritionist", "Health Coach", "Doctor", "Fitness Trainer", "Student"],
+      );
+    }
+
+    // Save student row after confirmation + profession
     if (!session.savedToSheet) {
       const row = await googleSheetsService.appendStudent({
         id: userId,
@@ -514,6 +668,7 @@ exports.processMessage = async (userId, message) => {
         webinarLink: session.webinarLinkSent ? getWebinarLink() : "",
         timeDate: session.linkSentAt || "",
         followups: session.followups || "",
+        takeFollowups: session.memory.takeFollowups || "Yes",
       });
       session.sheetRow = row;
       session.savedToSheet = true;
@@ -620,6 +775,8 @@ exports.processMessage = async (userId, message) => {
         session.memory.email = null;
         session.memory.whatsapp = null;
         session.memory.age = null;
+        session.memory.currentMedication = null;
+        session.memory.others = null;
       }
     }
 
@@ -633,20 +790,44 @@ exports.processMessage = async (userId, message) => {
     if (!session.contactConfirmed) {
       if (missing) {
         session.lastQuestion = "contact_details_patient";
-        return (
-          "Thank you for reaching out 💙\n\n" +
-          "We help patients manage & reverse Diabetes naturally using:\n\n" +
-          "✔ Personalized Nutrition\n" +
-          "✔ Lifestyle correction\n" +
-          "✔ Root-cause analysis\n" +
-          "✔ Medicine reduction support (if applicable)\n\n" +
-          "To understand your case, please share:\n\n" +
-          "•⁠  ⁠Name\n" +
-          "•⁠  ⁠Age\n" +
-          "•⁠  ⁠Email\n" +
-          "•⁠  ⁠WhatsApp Number\n\n" +
-          "Our team will review and guide you for the best consultation plan 🩺"
-        );
+        if (session.patientTrack === "other") {
+          return (
+            "Hi 👋 Thank you for reaching out to Dr. Ruchita Mehta – Clinic & Academy 💙\n" +
+            "Before we guide you further, could you please share:\n\n" +
+            "•⁠  ⁠Name\n" +
+            "•⁠  ⁠Age\n" +
+            "•⁠  ⁠Email\n" +
+            "•⁠  ⁠Current Medication (if any)\n" +
+            "•⁠  ⁠Contact Number\n" +
+            "•⁠  ⁠What health concern are you facing?\n" +
+            "•⁠  ⁠Since how long?\n\n" +
+            "This will help our team understand your case better and suggest the right support for you ✨"
+          );
+        }
+        return session.patientTrack === "other"
+          ? "Hi 👋 Thank you for reaching out to Dr. Ruchita Mehta – Clinic & Academy 💙\n" +
+              "Before we guide you further, could you please share:\n\n" +
+              "•⁠  ⁠Name\n" +
+              "•⁠  ⁠Age\n" +
+              "•⁠  ⁠Email\n" +
+              "•⁠  ⁠Current Medication (if any)\n" +
+              "•⁠  ⁠Contact Number\n" +
+              "•⁠  ⁠What health concern are you facing?\n" +
+              "•⁠  ⁠Since how long?\n\n" +
+              "This will help our team understand your case better and suggest the right support for you ✨"
+          : "Thank you for reaching out 💙\n\n" +
+              "We help patients manage & reverse Diabetes naturally using:\n\n" +
+              "✔ Personalized Nutrition\n" +
+              "✔ Lifestyle correction\n" +
+              "✔ Root-cause analysis\n" +
+              "✔ Medicine reduction support (if applicable)\n\n" +
+              "To understand your case, please share:\n\n" +
+              "•⁠  ⁠Name\n" +
+              "•⁠  ⁠Age\n" +
+              "•⁠  ⁠Email\n" +
+              "•⁠  ⁠Current Medication (if any)\n" +
+              "•⁠  ⁠Contact Number\n\n" +
+              "Our team will review and guide you for the best consultation plan 🩺";
       }
 
       session.lastQuestion = "confirm_contact_patient";
@@ -654,7 +835,8 @@ exports.processMessage = async (userId, message) => {
         `Thanks! Please confirm:\n` +
           `Name: ${session.memory.name}\n` +
           `Email: ${session.memory.email}\n` +
-          `WhatsApp: ${session.memory.whatsapp}\n` +
+          `Current Medication: ${session.memory.currentMedication || "Not provided"}\n` +
+          `Contact Number: ${session.memory.whatsapp}\n` +
           `Age: ${session.memory.age}\n` +
           `Is this correct? (Yes/No)`
       );
@@ -669,16 +851,20 @@ exports.processMessage = async (userId, message) => {
       number: session.memory.whatsapp,
       email: session.memory.email,
       profession: session.memory.profession,
-      diabetic: session.memory.diabetic,
+      currentMedication: session.memory.currentMedication,
       diabetesType: session.memory.diabetesType,
       diabetesYears: session.memory.diabetesYears,
-      onInsulin: session.memory.onInsulin,
+      sugarValues: session.memory.sugarValues,
       patientGoal: session.memory.patientGoal,
-      guidance: session.memory.wantsGuidance,
-      willBook: session.memory.willBook,
       timeDate: session.linkSentAt || "",
       followups: session.followups || "",
       others: session.memory.others,
+      type1Flag: session.memory.diabetesType === "Type 1" ? "Yes" : "",
+      type1Years: session.memory.type1Years,
+      type1SugarValues: session.memory.type1SugarValues,
+      type1HighLows: session.memory.type1HighLows,
+      type1Symptoms: session.memory.type1Symptoms,
+      takeFollowups: session.memory.takeFollowups || "Yes",
     });
     session.sheetRow = row;
     session.savedToSheet = true;
@@ -694,75 +880,174 @@ exports.processMessage = async (userId, message) => {
       session.lastQuestion = "other_problem";
       return "Please briefly describe your health concern and since how long.";
     }
-  }
 
-  if (session.lastQuestion === "diabetic") {
-    if (isYes(message)) {
-      session.memory.diabetic = "Yes";
-    } else if (isNo(message)) {
-      session.memory.diabetic = "No";
-    } else {
-      return "Please reply Yes or No.";
+    if (!session.otherOfferSent) {
+      session.otherOfferSent = true;
+      session.linkSentAt = nowIso();
+      await syncPatient(session, userId, { timeDate: session.linkSentAt });
+      scheduleOtherFollowups(session, userId);
+      return (
+        "Thank you for sharing 🙏\n\n" +
+        "For personalised guidance and a detailed plan, we recommend booking a 1:1 consultation with Dr. Ruchita Mehta 👩‍⚕️✨\n\n" +
+        "In the session, you’ll receive:\n" +
+        "✔️ Detailed health assessment\n" +
+        "✔️ Diet & lifestyle strategy\n" +
+        "✔️ Root-cause based plan\n" +
+        "✔️ Report analysis\n\n" +
+        "You can book your appointment here 👇\n" +
+        `🔗 ${getOtherLink()}\n\n` +
+        "Let us know once booked, we’ll guide you with the next steps 💙"
+      );
     }
-    await syncPatient(session, userId, { diabetic: session.memory.diabetic });
-  }
 
-  if (session.patientTrack !== "other" && !session.memory.diabetic) {
-    session.memory.diabetic = "Yes";
-    await syncPatient(session, userId, { diabetic: session.memory.diabetic });
+    return "Thanks for sharing. Anything else you’d like to know?";
   }
 
   if (session.lastQuestion === "diabetes_type") {
-    session.memory.diabetesType = message;
+    session.memory.diabetesType = message.trim();
     await syncPatient(session, userId, { diabetesType: session.memory.diabetesType });
   }
 
-  if (
-    session.patientTrack !== "other" &&
-    session.memory.diabetic === "Yes" &&
-    !session.memory.diabetesType
-  ) {
+  if (session.patientTrack !== "other" && !session.memory.diabetesType) {
     session.lastQuestion = "diabetes_type";
     return replyDiabetesTypes("Which type of Diabetes?");
   }
 
+  const isType1 =
+    session.memory.diabetesType &&
+    /type\\s*1/i.test(session.memory.diabetesType);
+
+  if (isType1) {
+    if (!session.type1IntroSent) {
+      session.type1IntroSent = true;
+      session.lastQuestion = "type1_years";
+      return (
+        "Hi 👋\n\n" +
+        "Thank you for reaching out to Dr Ruchita Mehta 🙂\n" +
+        "I personally understand Type 1 closely, as I have been managing Type 1 cases since 2012 and have helped many clients achieve more stable sugars and better energy levels with the right nutrition and lifestyle support.\n\n" +
+        "Managing sugars daily can feel overwhelming sometimes, but with the right guidance, stability is possible 🙂\n\n" +
+        "To guide you properly, I need a few quick details 👇\n\n" +
+        "1️⃣ Since how many years diagnosed?"
+      );
+    }
+
+    if (session.lastQuestion === "type1_years") {
+      session.memory.type1Years = message.trim();
+      await syncPatient(session, userId, { type1Years: session.memory.type1Years });
+    }
+    if (!session.memory.type1Years) {
+      session.lastQuestion = "type1_years";
+      return "Since how many years diagnosed?";
+    }
+
+    if (session.lastQuestion === "type1_sugar_values") {
+      session.memory.type1SugarValues = message.trim();
+      await syncPatient(session, userId, {
+        type1SugarValues: session.memory.type1SugarValues,
+      });
+    }
+    if (!session.memory.type1SugarValues) {
+      session.lastQuestion = "type1_sugar_values";
+      return "2️⃣ Latest Fasting & PP sugar values";
+    }
+
+    if (session.lastQuestion === "type1_high_lows") {
+      if (isYes(message)) session.memory.type1HighLows = "Yes";
+      else if (isNo(message)) session.memory.type1HighLows = "No";
+      else session.memory.type1HighLows = message.trim();
+      await syncPatient(session, userId, { type1HighLows: session.memory.type1HighLows });
+    }
+    if (!session.memory.type1HighLows) {
+      session.lastQuestion = "type1_high_lows";
+      return replyYesNo("3️⃣ Do you experience frequent sugar highs or lows?");
+    }
+
+    if (session.lastQuestion === "type1_symptoms") {
+      session.memory.type1Symptoms = message.trim();
+      await syncPatient(session, userId, { type1Symptoms: session.memory.type1Symptoms });
+    }
+    if (!session.memory.type1Symptoms) {
+      session.lastQuestion = "type1_symptoms";
+      return "4️⃣ Any symptoms like fatigue, weakness, weight changes or mood swings?";
+    }
+
+    if (session.lastQuestion === "type1_step_intent") {
+      if (isYes(message)) session.memory.type1StepIntent = "Yes";
+      else if (isNo(message)) session.memory.type1StepIntent = "No";
+      await syncPatient(session, userId, { type1StepIntent: session.memory.type1StepIntent });
+    }
+    if (!session.memory.type1StepIntent) {
+      session.lastQuestion = "type1_step_intent";
+      return replyYesNo(
+        "Thank you for sharing 🙏\n" +
+          "Based on your details, your sugars are currently not very stable, which is common in Type 1 when nutrition timing and lifestyle are not optimized.\n\n" +
+          "My approach focuses on:\n" +
+          "✔️ Reducing sugar spikes\n" +
+          "✔️ Improving insulin response\n" +
+          "✔️ Preventing complications\n" +
+          "✔️ Improving daily energy\n\n" +
+          "Would you like to know how we work step by step? 🙂"
+      );
+    }
+
+    if (session.lastQuestion === "type1_goal") {
+      const mapped = mapType1Goal(message);
+      if (mapped) {
+        session.memory.patientGoal = mapped;
+        await syncPatient(session, userId, { patientGoal: mapped });
+      } else {
+        return "Please reply with A, B, C, D, or E.";
+      }
+    }
+
+    if (!session.memory.patientGoal) {
+      session.lastQuestion = "type1_goal";
+      return replyWithQuickReplies(
+        "Before I share details, I just want to understand your goal 🙂\n\n" +
+          "What is your main focus right now?\n" +
+          "A️⃣ Better sugar control\n" +
+          "B️⃣ Reduce fluctuations\n" +
+          "C️⃣ Improve energy\n" +
+          "D️⃣ Prevent complications\n" +
+          "E️⃣ All of the above",
+        ["A", "B", "C", "D", "E"],
+      );
+    }
+
+    if (!session.type1Complete) {
+      session.type1Complete = true;
+      session.linkSentAt = nowIso();
+      await syncPatient(session, userId, { timeDate: session.linkSentAt });
+      scheduleType1Followups(session, userId);
+      return (
+        "Based on your goal, I recommend a personalized consultation where we deeply analyse your case and create a structured plan.\n\n" +
+        "You can book your appointment here 👇\n\n" +
+        `🔗 ${getType1Link()}\n\n` +
+        "Let us know once booked, we’ll guide you with the next steps 💙"
+      );
+    }
+
+    return "Thanks for sharing. Anything else you’d like to know?";
+  }
+
   if (session.lastQuestion === "diabetes_years") {
-    session.memory.diabetesYears = message;
+    session.memory.diabetesYears = message.trim();
     await syncPatient(session, userId, { diabetesYears: session.memory.diabetesYears });
   }
 
-  if (session.patientTrack !== "other" && session.memory.diabetic === "Yes" && !session.memory.diabetesYears) {
+  if (!session.memory.diabetesYears) {
     session.lastQuestion = "diabetes_years";
     return "Since how many years?";
   }
 
   if (session.lastQuestion === "sugar_values") {
-    session.memory.sugarValues = message;
-    // Store sugar values inside diabetic column for now
-    const diabeticField = `${session.memory.diabetic}; Sugar: ${session.memory.sugarValues}`;
-    await syncPatient(session, userId, { diabetic: diabeticField });
+    session.memory.sugarValues = message.trim();
+    await syncPatient(session, userId, { sugarValues: session.memory.sugarValues });
   }
 
-  if (session.patientTrack !== "other" && session.memory.diabetic === "Yes" && !session.memory.sugarValues) {
+  if (!session.memory.sugarValues) {
     session.lastQuestion = "sugar_values";
     return "Latest Fasting & PP sugar values (if available)";
-  }
-
-  if (session.lastQuestion === "on_insulin") {
-    if (isYes(message)) session.memory.onInsulin = "Yes";
-    else if (isNo(message)) session.memory.onInsulin = "No";
-    else return "Please reply Yes or No.";
-    await syncPatient(session, userId, { onInsulin: session.memory.onInsulin });
-  }
-
-  if (session.patientTrack !== "other" && session.memory.diabetic === "Yes" && !session.memory.onInsulin) {
-    session.lastQuestion = "on_insulin";
-    return replyYesNo("Are you on insulin or tablets? (Yes/No)");
-  }
-
-  if (session.patientTrack === "other" && !session.memory.patientGoal) {
-    session.memory.patientGoal = "Other health concern";
-    await syncPatient(session, userId, { patientGoal: session.memory.patientGoal });
   }
 
   if (session.lastQuestion === "patient_goal") {
@@ -775,7 +1060,7 @@ exports.processMessage = async (userId, message) => {
     }
   }
 
-  if (!session.memory.patientGoal && session.patientTrack !== "other") {
+  if (!session.memory.patientGoal) {
     session.lastQuestion = "patient_goal";
     return replyWithQuickReplies(
       "What is your main goal right now?\n" +
@@ -787,38 +1072,20 @@ exports.processMessage = async (userId, message) => {
       ["A", "B", "C", "D", "E"],
     );
   }
-  if (session.lastQuestion === "guidance") {
-    if (isYes(message)) {
-      session.memory.wantsGuidance = "Yes";
-      session.memory.willBook = "Yes";
-      session.linkSentAt = nowIso();
-      await syncPatient(session, userId, {
-        guidance: "Yes",
-        willBook: "Yes",
-        timeDate: session.linkSentAt,
-      });
-      schedulePatientFollowups(session, userId);
-      return `You can book 1:1 Call With Dr Ruchita Mehta: ${getPatientLink()}`;
-    }
-    if (isNo(message)) {
-      session.memory.wantsGuidance = "No";
-      session.memory.willBook = "No";
-      await syncPatient(session, userId, { guidance: "No", willBook: "No" });
-      schedulePatientFollowups(session, userId);
-      return "No problem. If you need help later, just message me.";
-    }
-  }
 
-  if (!session.memory.wantsGuidance) {
-    session.lastQuestion = "guidance";
+  if (!session.patientOfferSent) {
+    session.patientOfferSent = true;
+    session.linkSentAt = nowIso();
+    await syncPatient(session, userId, { timeDate: session.linkSentAt });
+    scheduleType2Followups(session, userId);
     return (
       "Based on your details, I’ll personally review your case and suggest the best plan 👩‍⚕️\n\n" +
       "Choose an option below 👇\n\n" +
       "🔹 Book 1:1 Call with Dr. Ruchita Mehta\n" +
-      "https://drruchitamehta.exlyapp.com/checkout/f92410b4-99bf-4da7-8d97-965cff79f1ea\n\n" +
+      `${getPatientLink()}\n\n` +
       "OR\n\n" +
       "🔹 Join FREE Diabetes Management Webinar\n" +
-      "https://drruchitamehta.exlyapp.com/checkout/8392be04-0a17-4c40-92a4-9dfc6f418140"
+      `${getDiabetesWebinarLink()}`
     );
   }
 
