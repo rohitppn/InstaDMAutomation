@@ -525,16 +525,7 @@ exports.processMessage = async (userId, message) => {
       if (extractedMedication) session.update({ currentMedication: extractedMedication });
     }
 
-    if (session.flow === "patient" && session.patientTrack === "other") {
-      if (!session.memory.others) {
-        const extractedOther = extractOtherConcern(message);
-        if (extractedOther) session.update({ others: extractedOther });
-      }
-      if (!session.memory.otherSince) {
-        const extractedSince = extractAge(message);
-        if (extractedSince) session.update({ otherSince: String(extractedSince) });
-      }
-    }
+    // For "other" concerns, collect problem details after confirmation only.
   }
 
   // Flow choice first
@@ -788,6 +779,10 @@ exports.processMessage = async (userId, message) => {
     if (session.lastQuestion === "confirm_contact_patient") {
       if (isYes(message)) {
         session.contactConfirmed = true;
+        if (session.patientTrack === "other") {
+          session.memory.others = null;
+          session.memory.otherSince = null;
+        }
       } else if (isNo(message)) {
         session.memory.name = null;
         session.memory.email = null;
@@ -795,6 +790,7 @@ exports.processMessage = async (userId, message) => {
         session.memory.age = null;
         session.memory.currentMedication = null;
         session.memory.others = null;
+        session.memory.otherSince = null;
       }
     }
 
@@ -816,7 +812,9 @@ exports.processMessage = async (userId, message) => {
             "•⁠  ⁠Age\n" +
             "•⁠  ⁠Email\n" +
             "•⁠  ⁠Current Medication (if any)\n" +
-            "•⁠  ⁠Contact Number\n\n" +
+            "•⁠  ⁠Contact Number\n" +
+            "•⁠  ⁠What health concern are you facing?\n" +
+            "•⁠  ⁠Since how long?\n\n" +
             "This will help our team understand your case better and suggest the right support for you ✨"
           );
         }
@@ -827,7 +825,9 @@ exports.processMessage = async (userId, message) => {
               "•⁠  ⁠Age\n" +
               "•⁠  ⁠Email\n" +
               "•⁠  ⁠Current Medication (if any)\n" +
-              "•⁠  ⁠Contact Number\n\n" +
+              "•⁠  ⁠Contact Number\n" +
+              "•⁠  ⁠What health concern are you facing?\n" +
+              "•⁠  ⁠Since how long?\n\n" +
               "This will help our team understand your case better and suggest the right support for you ✨"
           : "Thank you for reaching out 💙\n\n" +
               "We help patients manage & reverse Diabetes naturally using:\n\n" +
@@ -855,6 +855,16 @@ exports.processMessage = async (userId, message) => {
           `Is this correct? (Yes/No)`
       );
     }
+  }
+
+  if (session.patientTrack === "other" && session.contactConfirmed && !session.memory.others) {
+    session.lastQuestion = "other_problem";
+    return "What health concern are you facing?";
+  }
+
+  if (session.patientTrack === "other" && session.contactConfirmed && session.memory.others && !session.memory.otherSince) {
+    session.lastQuestion = "other_since";
+    return "Since how long?";
   }
 
   if (!session.savedToSheet) {
