@@ -857,14 +857,28 @@ exports.processMessage = async (userId, message) => {
     }
   }
 
-  if (session.patientTrack === "other" && session.contactConfirmed && !session.memory.others) {
-    session.lastQuestion = "other_problem";
-    return "What health concern are you facing?";
-  }
+  if (session.patientTrack === "other" && session.contactConfirmed) {
+    if (session.lastQuestion === "other_problem" && !session.memory.others) {
+      session.memory.others = message.trim();
+      await syncPatient(session, userId, { others: session.memory.others });
+    }
 
-  if (session.patientTrack === "other" && session.contactConfirmed && session.memory.others && !session.memory.otherSince) {
-    session.lastQuestion = "other_since";
-    return "Since how long?";
+    if (session.lastQuestion === "other_since" && !session.memory.otherSince) {
+      session.memory.otherSince = message.trim();
+      const combined = `${session.memory.others} | Since: ${session.memory.otherSince}`;
+      session.memory.others = combined;
+      await syncPatient(session, userId, { others: combined });
+    }
+
+    if (!session.memory.others) {
+      session.lastQuestion = "other_problem";
+      return "What health concern are you facing?";
+    }
+
+    if (!session.memory.otherSince) {
+      session.lastQuestion = "other_since";
+      return "Since how long?";
+    }
   }
 
   if (!session.savedToSheet) {
