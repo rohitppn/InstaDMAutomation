@@ -525,9 +525,15 @@ exports.processMessage = async (userId, message) => {
       if (extractedMedication) session.update({ currentMedication: extractedMedication });
     }
 
-    if (session.flow === "patient" && session.patientTrack === "other" && !session.memory.others) {
-      const extractedOther = extractOtherConcern(message);
-      if (extractedOther) session.update({ others: extractedOther });
+    if (session.flow === "patient" && session.patientTrack === "other") {
+      if (!session.memory.others) {
+        const extractedOther = extractOtherConcern(message);
+        if (extractedOther) session.update({ others: extractedOther });
+      }
+      if (!session.memory.otherSince) {
+        const extractedSince = extractAge(message);
+        if (extractedSince) session.update({ otherSince: String(extractedSince) });
+      }
     }
   }
 
@@ -804,15 +810,13 @@ exports.processMessage = async (userId, message) => {
         session.lastQuestion = "contact_details_patient";
         if (session.patientTrack === "other") {
           return (
-            "Hi 👋 Thank you for reaching out to Dr. Ruchita Mehta – Clinic & Academy 💙\n" +
+            "Hi 👋 Thank you for reaching out to Dr. Ruchita Mehta – Clinic & Academy 💙\n\n" +
             "Before we guide you further, could you please share:\n\n" +
             "•⁠  ⁠Name\n" +
             "•⁠  ⁠Age\n" +
             "•⁠  ⁠Email\n" +
             "•⁠  ⁠Current Medication (if any)\n" +
-            "•⁠  ⁠Contact Number\n" +
-            "•⁠  ⁠What health concern are you facing?\n" +
-            "•⁠  ⁠Since how long?\n\n" +
+            "•⁠  ⁠Contact Number\n\n" +
             "This will help our team understand your case better and suggest the right support for you ✨"
           );
         }
@@ -823,9 +827,7 @@ exports.processMessage = async (userId, message) => {
               "•⁠  ⁠Age\n" +
               "•⁠  ⁠Email\n" +
               "•⁠  ⁠Current Medication (if any)\n" +
-              "•⁠  ⁠Contact Number\n" +
-              "•⁠  ⁠What health concern are you facing?\n" +
-              "•⁠  ⁠Since how long?\n\n" +
+              "•⁠  ⁠Contact Number\n\n" +
               "This will help our team understand your case better and suggest the right support for you ✨"
           : "Thank you for reaching out 💙\n\n" +
               "We help patients manage & reverse Diabetes naturally using:\n\n" +
@@ -888,9 +890,21 @@ exports.processMessage = async (userId, message) => {
       await syncPatient(session, userId, { others: session.memory.others });
     }
 
+    if (session.lastQuestion === "other_since") {
+      session.memory.otherSince = message.trim();
+      const combined = `${session.memory.others} | Since: ${session.memory.otherSince}`;
+      session.memory.others = combined;
+      await syncPatient(session, userId, { others: combined });
+    }
+
     if (!session.memory.others) {
       session.lastQuestion = "other_problem";
-      return "Please briefly describe your health concern and since how long.";
+      return "What health concern are you facing?";
+    }
+
+    if (!session.memory.otherSince) {
+      session.lastQuestion = "other_since";
+      return "Since how long?";
     }
 
     if (!session.otherOfferSent) {

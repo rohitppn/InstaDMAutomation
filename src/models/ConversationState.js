@@ -20,6 +20,7 @@ class ConversationState {
       wantsGuidance: null,
       willBook: null,
       others: null,
+      otherSince: null,
       type1Years: null,
       type1SugarValues: null,
       type1HighLows: null,
