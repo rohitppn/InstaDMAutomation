@@ -43,6 +43,17 @@ const replyYesNo = (text) => replyWithQuickReplies(text, ["Yes", "No"]);
 const replyDiabetesTypes = (text) =>
   replyWithQuickReplies(text, ["Type 1", "Type 2", "Prediabetes", "Gestational"]);
 
+const mapDiabetesType = (text) => {
+  const normalized = text.trim().toLowerCase();
+  if (normalized.includes("type 1") || normalized === "type1" || normalized === "1") return "Type 1";
+  if (normalized.includes("type 2") || normalized === "type2" || normalized === "2") return "Type 2";
+  if (normalized.includes("prediabetes") || normalized.includes("pre diabetes") || normalized === "pre") {
+    return "Prediabetes";
+  }
+  if (normalized.includes("gestational")) return "Gestational";
+  return null;
+};
+
 const extractEmail = (text) => {
   const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   return match ? match[0].toLowerCase() : null;
@@ -214,7 +225,7 @@ const extractMedication = (text) => {
     const lower = line.toLowerCase();
     if (/(patient|student|doctor|nutrition|other)/.test(lower)) continue;
     if (/^(hi|hello|hey|hlo|hii|hiii)$/i.test(lower)) continue;
-    if (/(med|medicine|tablet|insulin|none|no)/.test(lower)) return line;
+    if (/(med|medicine|tablet|insulin|none|no|yes)/.test(lower)) return line;
   }
   return null;
 };
@@ -805,7 +816,7 @@ exports.processMessage = async (userId, message) => {
           );
         }
         return session.patientTrack === "other"
-          ? "Hi 👋 Thank you for reaching out to Dr. Ruchita Mehta – Clinic & Academy 💙\n" +
+          ? "Hi 👋 Thank you for reaching out to Dr. Ruchita Mehta – Clinic & Academy 💙\n\n" +
               "Before we guide you further, could you please share:\n\n" +
               "•⁠  ⁠Name\n" +
               "•⁠  ⁠Age\n" +
@@ -904,7 +915,8 @@ exports.processMessage = async (userId, message) => {
   }
 
   if (session.lastQuestion === "diabetes_type") {
-    session.memory.diabetesType = message.trim();
+    const mapped = mapDiabetesType(message);
+    session.memory.diabetesType = mapped || message.trim();
     await syncPatient(session, userId, { diabetesType: session.memory.diabetesType });
   }
 
