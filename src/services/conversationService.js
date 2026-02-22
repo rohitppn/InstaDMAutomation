@@ -274,7 +274,7 @@ const syncPatient = async (session, userId, overrides = {}) => {
     timeDate: session.linkSentAt || "",
     followups: session.followups || "",
     others: session.memory.others,
-    type1Flag: session.memory.diabetesType === "Type 1" ? "Yes" : "",
+    type1Flag: session.memory.type1Flag || (session.memory.diabetesType === "Type 1" ? "Yes" : ""),
     type1Years: session.memory.type1Years,
     type1SugarValues: session.memory.type1SugarValues,
     type1HighLows: session.memory.type1HighLows,
@@ -456,6 +456,7 @@ const loadExisting = async (session, userId) => {
       sugarValues: row[9] || null,
       patientGoal: row[10] || null,
       others: row[13] || null,
+      type1Flag: row[14] || null,
       type1Years: row[15] || null,
       type1SugarValues: row[16] || null,
       type1HighLows: row[17] || null,
@@ -917,6 +918,8 @@ exports.processMessage = async (userId, message) => {
   if (session.lastQuestion === "diabetes_type") {
     const mapped = mapDiabetesType(message);
     session.memory.diabetesType = mapped || message.trim();
+    session.memory.type1Flag =
+      session.memory.diabetesType === "Type 1" ? "Yes" : "";
     await syncPatient(session, userId, { diabetesType: session.memory.diabetesType });
   }
 
@@ -926,20 +929,24 @@ exports.processMessage = async (userId, message) => {
   }
 
   const isType1 =
-    session.memory.diabetesType &&
-    /type\\s*1/i.test(session.memory.diabetesType);
+    session.memory.type1Flag === "Yes" ||
+    (session.memory.diabetesType &&
+      /type\\s*1/i.test(session.memory.diabetesType));
 
   if (isType1) {
     if (!session.type1IntroSent) {
       session.type1IntroSent = true;
       session.lastQuestion = "type1_years";
       return (
-        "Hi 👋\n\n" +
+        "Hi 👋 \n\n" +
         "Thank you for reaching out to Dr Ruchita Mehta 🙂\n" +
         "I personally understand Type 1 closely, as I have been managing Type 1 cases since 2012 and have helped many clients achieve more stable sugars and better energy levels with the right nutrition and lifestyle support.\n\n" +
         "Managing sugars daily can feel overwhelming sometimes, but with the right guidance, stability is possible 🙂\n\n" +
         "To guide you properly, I need a few quick details 👇\n\n" +
-        "1️⃣ Since how many years diagnosed?"
+        "1️⃣ Since how many years diagnosed?\n" +
+        "2️⃣ Latest Fasting & PP sugar values\n" +
+        "3️⃣ Do you experience frequent sugar highs or lows?\n" +
+        "4️⃣ Any symptoms like fatigue, weakness, weight changes or mood swings?"
       );
     }
 
@@ -960,7 +967,7 @@ exports.processMessage = async (userId, message) => {
     }
     if (!session.memory.type1SugarValues) {
       session.lastQuestion = "type1_sugar_values";
-      return "2️⃣ Latest Fasting & PP sugar values";
+      return "Latest Fasting & PP sugar values";
     }
 
     if (session.lastQuestion === "type1_high_lows") {
@@ -971,7 +978,7 @@ exports.processMessage = async (userId, message) => {
     }
     if (!session.memory.type1HighLows) {
       session.lastQuestion = "type1_high_lows";
-      return replyYesNo("3️⃣ Do you experience frequent sugar highs or lows?");
+      return replyYesNo("Do you experience frequent sugar highs or lows?");
     }
 
     if (session.lastQuestion === "type1_symptoms") {
@@ -980,7 +987,7 @@ exports.processMessage = async (userId, message) => {
     }
     if (!session.memory.type1Symptoms) {
       session.lastQuestion = "type1_symptoms";
-      return "4️⃣ Any symptoms like fatigue, weakness, weight changes or mood swings?";
+      return "Any symptoms like fatigue, weakness, weight changes or mood swings?";
     }
 
     if (session.lastQuestion === "type1_step_intent") {
@@ -998,7 +1005,8 @@ exports.processMessage = async (userId, message) => {
           "✔️ Improving insulin response\n" +
           "✔️ Preventing complications\n" +
           "✔️ Improving daily energy\n\n" +
-          "Would you like to know how we work step by step? 🙂"
+          "Would you like to know how we work step by step? 🙂\n" +
+          "Type (Yes or No)"
       );
     }
 

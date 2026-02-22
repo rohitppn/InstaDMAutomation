@@ -25,6 +25,7 @@ class ConversationState {
       type1HighLows: null,
       type1Symptoms: null,
       type1StepIntent: null,
+      type1Flag: null,
       takeFollowups: "Yes",
       experienceLevel: null,
       goal: null,
