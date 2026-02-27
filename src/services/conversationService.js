@@ -213,6 +213,81 @@ const isQuestion = (text) => /[?]/.test(text);
 const isWebinarLinkRequest = (text) =>
   /(webinar|link|register|registration|join)/i.test(text);
 
+const parseAdLead = (text) => {
+  const get = (re) => {
+    const m = text.match(re);
+    return m ? m[1].trim() : null;
+  };
+
+  const diabetesTypeRaw = get(/which\s*type\s*of\s*diabetes\s*do\s*you\s*have\??\s*:\s*(.+)/i);
+  const medicationRaw = get(/are\s*you\s*taking\s*diabetes\s*medication\s*\/?\s*insulin\??\s*:\s*(.+)/i);
+  const name = get(/full\s*name\s*:\s*(.+)/i);
+  const phoneRaw = get(/phone\s*number\s*:\s*(.+)/i);
+  if (!diabetesTypeRaw || !medicationRaw || !name || !phoneRaw) return null;
+
+  const diabetesType = mapDiabetesType(diabetesTypeRaw) || diabetesTypeRaw;
+  const phone = phoneRaw.replace(/\D/g, "");
+  if (!phone) return null;
+
+  return {
+    name,
+    whatsapp: phone,
+    currentMedication: medicationRaw,
+    diabetesType,
+    type1Flag: diabetesType === "Type 1" ? "Yes" : "",
+  };
+};
+
+const isStudentComplete = (session) =>
+  Boolean(
+    session.memory.name &&
+      session.memory.age &&
+      session.memory.email &&
+      session.memory.whatsapp &&
+      session.memory.profession &&
+      session.memory.experienceLevel &&
+      session.memory.goal &&
+      session.memory.willingWebinar
+  );
+
+const isOtherComplete = (session) =>
+  Boolean(
+    session.memory.name &&
+      session.memory.age &&
+      session.memory.email &&
+      session.memory.whatsapp &&
+      session.memory.others &&
+      session.otherOfferSent
+  );
+
+const isType1Complete = (session) =>
+  Boolean(
+    session.memory.diabetesType === "Type 1" &&
+      session.memory.type1Years &&
+      session.memory.type1SugarValues &&
+      session.memory.type1HighLows &&
+      session.memory.type1Symptoms &&
+      session.memory.patientGoal &&
+      session.type1Complete
+  );
+
+const isType2Complete = (session) =>
+  Boolean(
+    session.memory.diabetesType &&
+      session.memory.diabetesType !== "Type 1" &&
+      session.memory.diabetesYears &&
+      session.memory.sugarValues &&
+      session.memory.patientGoal &&
+      session.patientOfferSent
+  );
+
+const isSessionComplete = (session) => {
+  if (session.flow === "student") return isStudentComplete(session);
+  if (session.flow === "patient" && session.patientTrack === "other") return isOtherComplete(session);
+  if (session.flow === "patient") return isType1Complete(session) || isType2Complete(session);
+  return false;
+};
+
 const extractMedication = (text) => {
   const lines = text
     .split(/\n+/)
@@ -433,6 +508,7 @@ const loadExisting = async (session, userId) => {
     session.webinarLinkSent = Boolean(row[9]);
     session.followups = row[11] || "";
     session.contactConfirmed = true;
+    session.isClosed = isStudentComplete(session);
     return true;
   }
 
@@ -467,6 +543,10 @@ const loadExisting = async (session, userId) => {
     session.followups = row[12] || "";
     session.patientTrack = row[13] ? "other" : "diabetes";
     session.contactConfirmed = true;
+    session.otherOfferSent = Boolean(row[13] && row[11]);
+    session.patientOfferSent = Boolean(row[7] && row[7] !== "Type 1" && row[11]);
+    session.type1Complete = Boolean(row[14] === "Yes" && row[11]);
+    session.isClosed = isSessionComplete(session);
     return true;
   }
 
@@ -489,6 +569,82 @@ exports.processMessage = async (userId, message) => {
     } catch (err) {
       console.error("❌ Google Sheets lookup error:", err.message);
     }
+  }
+
+  const adLead = parseAdLead(message);
+  if (adLead) {
+    session.flow = "patient";
+    session.patientTrack = "diabetes";
+    session.contactConfirmed = true;
+    session.update({
+      profession: "Patient",
+      name: adLead.name,
+      whatsapp: adLead.whatsapp,
+      currentMedication: adLead.currentMedication,
+      diabetesType: adLead.diabetesType,
+      type1Flag: adLead.type1Flag,
+    });
+
+    if (!session.savedToSheet) {
+      const row = await googleSheetsService.appendPatient({
+        id: userId,
+        name: session.memory.name,
+        age: session.memory.age,
+        number: session.memory.whatsapp,
+        email: session.memory.email,
+        profession: session.memory.profession,
+        currentMedication: session.memory.currentMedication,
+        diabetesType: session.memory.diabetesType,
+        diabetesYears: session.memory.diabetesYears,
+        sugarValues: session.memory.sugarValues,
+        patientGoal: session.memory.patientGoal,
+        timeDate: session.linkSentAt || "",
+        followups: session.followups || "",
+        others: session.memory.others,
+        type1Flag: session.memory.type1Flag || "",
+        type1Years: session.memory.type1Years,
+        type1SugarValues: session.memory.type1SugarValues,
+        type1HighLows: session.memory.type1HighLows,
+        type1Symptoms: session.memory.type1Symptoms,
+        takeFollowups: session.memory.takeFollowups || "Yes",
+      });
+      session.sheetRow = row;
+      session.savedToSheet = true;
+    } else {
+      await syncPatient(session, userId, {
+        name: session.memory.name,
+        number: session.memory.whatsapp,
+        currentMedication: session.memory.currentMedication,
+        diabetesType: session.memory.diabetesType,
+        type1Flag: session.memory.type1Flag || "",
+      });
+    }
+
+    session.linkSentAt = nowIso();
+    if (session.memory.diabetesType === "Type 1") {
+      session.type1Complete = true;
+      await syncPatient(session, userId, { timeDate: session.linkSentAt });
+      session.isClosed = true;
+      return (
+        "Based on your details, I’ll personally review your case and suggest the best plan 👩‍⚕️\n\n" +
+        "🔹 Book 1:1 Call with Dr. Ruchita Mehta\n" +
+        `${getType1Link()}`
+      );
+    }
+
+    session.patientOfferSent = true;
+    await syncPatient(session, userId, { timeDate: session.linkSentAt });
+    session.isClosed = true;
+    return (
+      "Based on your details, I’ll personally review your case and suggest the best plan 👩‍⚕️\n\n" +
+      "🔹 Book 1:1 Call with Dr. Ruchita Mehta\n" +
+      `${getPatientLink()}`
+    );
+  }
+
+  if (session.isClosed || isSessionComplete(session)) {
+    session.isClosed = true;
+    return null;
   }
 
   // Use LLM for short answers when user asks random question
@@ -754,11 +910,13 @@ exports.processMessage = async (userId, message) => {
           timeDate: session.linkSentAt,
         });
         scheduleStudentFollowups(session, userId);
+        session.isClosed = true;
         return `Here's your webinar link: ${getWebinarLink()}`;
       }
       if (isNo(message)) {
         session.memory.willingWebinar = "No";
         await syncStudent(session, userId, { willingWebinar: "No" });
+        session.isClosed = true;
         return "No worries. If you change your mind, I’m here.";
       }
     }
@@ -936,6 +1094,7 @@ exports.processMessage = async (userId, message) => {
       session.linkSentAt = nowIso();
       await syncPatient(session, userId, { timeDate: session.linkSentAt });
       scheduleOtherFollowups(session, userId);
+      session.isClosed = true;
       return (
         "Thank you for sharing 🙏\n\n" +
         "For personalised guidance and a detailed plan, we recommend booking a 1:1 consultation with Dr. Ruchita Mehta 👩‍⚕️✨\n\n" +
@@ -1077,6 +1236,7 @@ exports.processMessage = async (userId, message) => {
       session.linkSentAt = nowIso();
       await syncPatient(session, userId, { timeDate: session.linkSentAt });
       scheduleType1Followups(session, userId);
+      session.isClosed = true;
       return (
         "Based on your goal, I recommend a personalized consultation where we deeply analyse your case and create a structured plan.\n\n" +
         "You can book your appointment here 👇\n\n" +
@@ -1136,14 +1296,11 @@ exports.processMessage = async (userId, message) => {
     session.linkSentAt = nowIso();
     await syncPatient(session, userId, { timeDate: session.linkSentAt });
     scheduleType2Followups(session, userId);
+    session.isClosed = true;
     return (
       "Based on your details, I’ll personally review your case and suggest the best plan 👩‍⚕️\n\n" +
-      "Choose an option below 👇\n\n" +
       "🔹 Book 1:1 Call with Dr. Ruchita Mehta\n" +
-      `${getPatientLink()}\n\n` +
-      "OR\n\n" +
-      "🔹 Join FREE Diabetes Management Webinar\n" +
-      `${getDiabetesWebinarLink()}`
+      `${getPatientLink()}`
     );
   }
 

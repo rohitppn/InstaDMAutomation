@@ -60,6 +60,7 @@ exports.handleMessage = async (req, res) => {
     const reply = await conversationService.processMessage(userId, messageText);
 
     const replyText = typeof reply === "string" ? reply : reply?.text;
+    if (!replyText) return;
     console.log("🤖 Bot reply:", replyText);
 
     // 📤 Send reply back to Instagram

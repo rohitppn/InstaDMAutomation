@@ -60,6 +60,7 @@ class ConversationState {
     this.type1Complete = false;
     this.type1IntroSent = false;
     this.followups = "";
+    this.isClosed = false;
   }
 
   /**
