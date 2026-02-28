@@ -1102,7 +1102,7 @@ exports.processMessage = async (userId, message) => {
         "✔️ Root-cause based plan\n" +
         "✔️ Report analysis\n\n" +
         "You can book your appointment here 👇\n" +
-        `🔗 ${getOtherLink()}\n\n` +
+        `🔗 ${getType1Link()}\n\n` +
         "Let us know once booked, we’ll guide you with the next steps 💙"
       );
     }
