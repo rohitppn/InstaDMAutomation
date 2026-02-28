@@ -29,6 +29,12 @@ const getType1Link = () =>
 const getOtherLink = () => process.env.OTHER_LINK || getType1Link();
 
 const nowIso = () => new Date().toISOString();
+const getPersonalizedBookingMessage = (name) =>
+  `Hi ${name || "there"}\n` +
+  "Here is your booking link\n" +
+  `${getType1Link()}\n\n` +
+  "Regards,\n" +
+  "Dr. Ruchita";
 
 const replyWithQuickReplies = (text, options) => ({
   text,
@@ -625,21 +631,13 @@ exports.processMessage = async (userId, message) => {
       session.type1Complete = true;
       await syncPatient(session, userId, { timeDate: session.linkSentAt });
       session.isClosed = true;
-      return (
-        "Based on your details, I’ll personally review your case and suggest the best plan 👩‍⚕️\n\n" +
-        "🔹 Book 1:1 Call with Dr. Ruchita Mehta\n" +
-        `${getType1Link()}`
-      );
+      return getPersonalizedBookingMessage(session.memory.name);
     }
 
     session.patientOfferSent = true;
     await syncPatient(session, userId, { timeDate: session.linkSentAt });
     session.isClosed = true;
-    return (
-      "Based on your details, I’ll personally review your case and suggest the best plan 👩‍⚕️\n\n" +
-      "🔹 Book 1:1 Call with Dr. Ruchita Mehta\n" +
-      `${getPatientLink()}`
-    );
+    return getPersonalizedBookingMessage(session.memory.name);
   }
 
   if (session.isClosed || isSessionComplete(session)) {
@@ -1297,11 +1295,7 @@ exports.processMessage = async (userId, message) => {
     await syncPatient(session, userId, { timeDate: session.linkSentAt });
     scheduleType2Followups(session, userId);
     session.isClosed = true;
-    return (
-      "Based on your details, I’ll personally review your case and suggest the best plan 👩‍⚕️\n\n" +
-      "🔹 Book 1:1 Call with Dr. Ruchita Mehta\n" +
-      `${getPatientLink()}`
-    );
+    return getPersonalizedBookingMessage(session.memory.name);
   }
 
   return "Thanks for sharing. Anything else you’d like to know?";
