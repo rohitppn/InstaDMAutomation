@@ -86,6 +86,24 @@ const getById = async ({ sheetName, lastColumn, id }) => {
   return null;
 };
 
+const getAll = async ({ sheetName, lastColumn }) => {
+  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+  if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEET_ID");
+
+  const sheets = getSheetsClient();
+  const range = `${sheetName}!A2:${lastColumn}`;
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range,
+  });
+
+  const rows = result.data?.values || [];
+  return rows.map((row, index) => ({
+    row: index + 2,
+    data: row,
+  }));
+};
+
 
 exports.updateStudent = async ({
   row,
@@ -125,6 +143,7 @@ exports.updateStudent = async ({
   });
 
 exports.getStudentById = async ({ id }) => getById({ sheetName: "Sheet1", lastColumn: "M", id });
+exports.getAllStudents = async () => getAll({ sheetName: "Sheet1", lastColumn: "M" });
 
 exports.appendStudent = async ({
   id,
@@ -260,3 +279,4 @@ exports.updatePatient = async ({
   });
 
 exports.getPatientById = async ({ id }) => getById({ sheetName: "Sheet2", lastColumn: "T", id });
+exports.getAllPatients = async () => getAll({ sheetName: "Sheet2", lastColumn: "T" });

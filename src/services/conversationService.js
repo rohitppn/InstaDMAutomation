@@ -368,6 +368,93 @@ const syncPatient = async (session, userId, overrides = {}) => {
 const shouldSendFollowups = (session) =>
   String(session.memory.takeFollowups || "Yes").toLowerCase() !== "no";
 
+const shouldSendByValue = (value) => String(value || "Yes").toLowerCase() !== "no";
+
+const hasFollowup = (existing, marker) => {
+  if (!existing || !marker) return false;
+  return existing.includes(marker);
+};
+
+const safeDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+};
+
+const readLatestLeadState = async ({ flow, userId }) => {
+  if (flow === "student") {
+    const found = await googleSheetsService.getStudentById({ id: userId });
+    if (!found) return null;
+    const row = found.data || [];
+    return {
+      row: found.row,
+      flow: "student",
+      takeFollowups: row[12] || "Yes",
+      followups: row[11] || "",
+      timeDate: row[10] || "",
+    };
+  }
+
+  const found = await googleSheetsService.getPatientById({ id: userId });
+  if (!found) return null;
+  const row = found.data || [];
+  return {
+    row: found.row,
+    flow: "patient",
+    takeFollowups: row[19] || "Yes",
+    followups: row[12] || "",
+    timeDate: row[11] || "",
+  };
+};
+
+const syncFollowupsForFlow = async ({ flow, session, userId, row, followups }) => {
+  if (flow === "student") {
+    await googleSheetsService.updateStudent({
+      row,
+      id: userId,
+      name: session?.memory?.name || "",
+      age: session?.memory?.age || "",
+      number: session?.memory?.whatsapp || "",
+      email: session?.memory?.email || "",
+      profession: session?.memory?.profession || "",
+      experienceLevel: session?.memory?.experienceLevel || "",
+      goal: session?.memory?.goal || "",
+      willingWebinar: session?.memory?.willingWebinar || "",
+      webinarLink: session?.webinarLinkSent ? getWebinarLink() : "",
+      timeDate: session?.linkSentAt || "",
+      followups,
+      takeFollowups: session?.memory?.takeFollowups || "Yes",
+    });
+    return;
+  }
+
+  await googleSheetsService.updatePatient({
+    row,
+    id: userId,
+    name: session?.memory?.name || "",
+    age: session?.memory?.age || "",
+    number: session?.memory?.whatsapp || "",
+    email: session?.memory?.email || "",
+    profession: session?.memory?.profession || "",
+    currentMedication: session?.memory?.currentMedication || "",
+    diabetesType: session?.memory?.diabetesType || "",
+    diabetesYears: session?.memory?.diabetesYears || "",
+    sugarValues: session?.memory?.sugarValues || "",
+    patientGoal: session?.memory?.patientGoal || "",
+    timeDate: session?.linkSentAt || "",
+    followups,
+    others: session?.memory?.others || "",
+    type1Flag:
+      session?.memory?.type1Flag || (session?.memory?.diabetesType === "Type 1" ? "Yes" : ""),
+    type1Years: session?.memory?.type1Years || "",
+    type1SugarValues: session?.memory?.type1SugarValues || "",
+    type1HighLows: session?.memory?.type1HighLows || "",
+    type1Symptoms: session?.memory?.type1Symptoms || "",
+    takeFollowups: session?.memory?.takeFollowups || "Yes",
+  });
+};
+
 const scheduleFollowups = async ({
   session,
   userId,
@@ -376,38 +463,10 @@ const scheduleFollowups = async ({
   follow3,
   syncFn,
 }) => {
-  if (!shouldSendFollowups(session) || session.followUpScheduled) return;
+  // Follow-ups are dispatched by the recovery worker using sheet Time/Date.
+  // This keeps behavior consistent across restarts/redeploys.
+  if (!shouldSendFollowups(session)) return;
   session.followUpScheduled = true;
-
-  setTimeout(async () => {
-    try {
-      await sendMessage({ recipientId: userId, text: follow1 });
-      session.followups = appendFollowup(session.followups, follow1);
-      await syncFn(session, userId, { followups: session.followups });
-    } catch (err) {
-      console.error("❌ Follow-up error:", err.message);
-    }
-  }, 24 * 60 * 60 * 1000);
-
-  setTimeout(async () => {
-    try {
-      await sendMessage({ recipientId: userId, text: follow2 });
-      session.followups = appendFollowup(session.followups, follow2);
-      await syncFn(session, userId, { followups: session.followups });
-    } catch (err) {
-      console.error("❌ Follow-up error:", err.message);
-    }
-  }, 48 * 60 * 60 * 1000);
-
-  setTimeout(async () => {
-    try {
-      await sendMessage({ recipientId: userId, text: follow3 });
-      session.followups = appendFollowup(session.followups, follow3);
-      await syncFn(session, userId, { followups: session.followups });
-    } catch (err) {
-      console.error("❌ Follow-up error:", err.message);
-    }
-  }, 72 * 60 * 60 * 1000);
 };
 
 const scheduleStudentFollowups = (session, userId) =>
@@ -489,6 +548,184 @@ const scheduleOtherFollowups = (session, userId) =>
       getOtherLink() +
       "\n\nWishing you good health and balance always 🌿",
   });
+
+const getStudentFollowupPack = () => ({
+  follow1:
+    "Hello 👋\n\nYou had earlier shown interest in learning how to handle diabetes clients confidently.\n\nI’m conducting a free live training webinar where I’ll explain:\n\n✔ Why sugars don’t drop even with good diet\n✔ How to decode blood reports\n✔ How to become a Diabetes Coach\n\n🗓 Monday | 6:00 PM IST\n📍 Live on Zoom\nRegister here:\n👉 " +
+    getWebinarLink(),
+  follow2:
+    "Hi 😊\n\nI noticed you showed interest in the FREE Diabetes Educator Webinar, but your seat isn’t confirmed yet.\n\nThis session is specifically designed for Nutritionists & Health Coaches who want better results in diabetes cases.\n\nYou’ll learn:\n🔥 Why most coaches struggle despite diet plans\n🔥 My proven 3D diabetes system\n🔥 Step-by-step patient protocol\n🔥 Real case examples from practice\n\nSeats are limited per Monday batch.\n\n👉 Here’s the registration link to confirm your seat:\n\n" +
+    getWebinarLink() +
+    "\n\n– Dr. Ruchita Mehta",
+  follow3:
+    "Hello 😊\n\nLooking forward to seeing you in the Live Webinar on Monday at 6 PM.\n\nMake sure your seat is confirmed here:\n🔗 " +
+    getWebinarLink() +
+    "\n\nSee you live.",
+});
+
+const getType2FollowupPack = () => ({
+  follow1:
+    "Hello 😊\n\nJust checking in, aapne Diabetes support ke liye enquiry ki thi but abhi tak next step nahi liya.\n\nAgar aap sugar levels naturally manage / reverse karna chahte ho, we have 2 ways to help you 👇\n\n🩺 1:1 Personal Consultation\nCustomized diet + lifestyle plan\n👉 Book here:\n" +
+    getPatientLink() +
+    "\n\n🎓 FREE Diabetes Webinar\nLearn how to control Diabetes naturally\n👉 Join free here:\n" +
+    getDiabetesWebinarLink() +
+    "\n\nReply CALL or WEBINAR — we’ll guide you 😊",
+  follow2:
+    "Hi 👋\n\nDiabetes ko manage karna confusing lag sakta hai — what to eat, what to avoid, medicines ka kya karein?\n\nIsliye we offer 2 support options 💙\n\n🔹 1:1 Consultation\nPersonal case analysis + diet plan + medicine reduction support\n\n🔹 FREE Webinar\nStep-by-step Diabetes management guidance\n\nChoose what suits you 👇\n\n👉 Book Consultation:\n" +
+    getPatientLink() +
+    "\n\n👉 Join Webinar:\n" +
+    getDiabetesWebinarLink(),
+  follow3:
+    "Final reminder 😊\n\nAgar aap serious ho Diabetes control / reversal ko lekar — don’t delay your action ⏳\n\nStart with learning or go personal — choice is yours 👇\n\n🩺 Book 1:1 Consultation\nGet personalized plan & doctor guidance\n" +
+    getPatientLink() +
+    "\n\n🎓 Join FREE Webinar\nUnderstand root cause & natural management\n" +
+    getDiabetesWebinarLink() +
+    "\n\nReply START — team will assist you 👍",
+});
+
+const getType1FollowupPack = () => ({
+  follow1:
+    "Hi 🙂 Just checking in 💙\n\nI didn’t see your appointment booking yet, and I don’t want you to miss the chance to start stabilizing your sugars properly.\n\nType 1 management becomes much easier when you follow the right structure and timing plan 🙏\n\nIf better control and stable energy is your goal, let’s take the first step 👇\n🔗 " +
+    getType1Link() +
+    "\n\nLet me know if you need any help booking 🙂",
+  follow2:
+    "Hi again 💙\n\nJust a gentle reminder — fluctuating sugars for long periods can affect energy, mood, and long-term health.\n\nThe sooner we structure your nutrition and insulin timing correctly, the smoother your daily readings can become 🙂\n\nIf you’re serious about improving stability, you can secure your consultation here 👇\n🔗 " +
+    getType1Link() +
+    "\n\nReply “BOOKED” once done, and we’ll guide you with next steps 🙏",
+  follow3:
+    "Hi 💙\nI’ll close this support thread for now so we don’t keep disturbing you 🙏\n\nBut if managing Type 1 feels overwhelming or your sugars are still unstable, remember — you don’t have to figure it out alone.\n\nStructured guidance can truly change daily control and confidence.\nWhenever you’re ready, you can book here 👇\n🔗 " +
+    getType1Link() +
+    "\n\nWe’re here to support you 💙",
+});
+
+const getOtherFollowupPack = () => ({
+  follow1:
+    "Hi 🙂\nJust checking in with you regarding your health concern 💙\n\nSometimes we get busy and delay prioritising our health — but early guidance can prevent things from getting more complicated later.\n\nA personalised 1:1 consultation will help us deeply analyse your case and create a clear, structured recovery plan ✨\nYou can book your session here 👇\n🔗 " +
+    getOtherLink() +
+    "\n\nLet me know if you have any questions before booking 🙂",
+  follow2:
+    "Hi again 🙂\nJust a gentle reminder 💙\n\nHealth concerns often need a root-cause approach — not just temporary symptom relief.\n\nIn your consultation, Dr. Ruchita will:\n✔️ Understand your complete health history\n✔️ Analyse reports (if available)\n✔️ Identify root triggers\n✔️ Create a practical diet & lifestyle roadmap\n\nYou can secure your slot here 👇\n🔗 " +
+    getOtherLink() +
+    "\n\nWe’ll guide you with next steps once booked ✨",
+  follow3:
+    "Hi 🙂\nWe don’t want to disturb you further, so we’ll pause the follow-ups for now 💙\n\nWhenever you feel ready to work on your health in a structured and guided way, we’re here to support you.\n\nYou can book your consultation anytime here 👇\n🔗 " +
+    getOtherLink() +
+    "\n\nWishing you good health and balance always 🌿",
+});
+
+const sendDueFollowup = async ({ flow, rowData, followupText, marker, dueAt }) => {
+  const userId = rowData[0];
+  if (!userId) return;
+
+  const latest = await readLatestLeadState({ flow, userId });
+  if (!latest || !shouldSendByValue(latest.takeFollowups)) return;
+  if (hasFollowup(latest.followups, marker)) return;
+  if (Date.now() < dueAt.getTime()) return;
+
+  await sendMessage({ recipientId: userId, text: followupText });
+  const merged = appendFollowup(latest.followups, followupText);
+
+  await syncFollowupsForFlow({
+    flow,
+    userId,
+    row: latest.row,
+    followups: merged,
+    session: { memory: { takeFollowups: latest.takeFollowups }, linkSentAt: latest.timeDate },
+  });
+};
+
+const recoverDueFollowups = async () => {
+  const now = Date.now();
+
+  const students = await googleSheetsService.getAllStudents();
+  for (const item of students) {
+    const row = item.data || [];
+    const timeDate = safeDate(row[10]);
+    if (!timeDate) continue;
+    if (!shouldSendByValue(row[12] || "Yes")) continue;
+
+    const { follow1, follow2, follow3 } = getStudentFollowupPack();
+    const followups = row[11] || "";
+    const due24 = new Date(timeDate.getTime() + 24 * 60 * 60 * 1000);
+    const due48 = new Date(timeDate.getTime() + 48 * 60 * 60 * 1000);
+    const due72 = new Date(timeDate.getTime() + 72 * 60 * 60 * 1000);
+
+    if (!hasFollowup(followups, follow1) && now >= due24.getTime()) {
+      await sendDueFollowup({ flow: "student", rowData: row, followupText: follow1, marker: follow1, dueAt: due24 });
+    }
+    if (!hasFollowup(followups, follow2) && now >= due48.getTime()) {
+      await sendDueFollowup({ flow: "student", rowData: row, followupText: follow2, marker: follow2, dueAt: due48 });
+    }
+    if (!hasFollowup(followups, follow3) && now >= due72.getTime()) {
+      await sendDueFollowup({ flow: "student", rowData: row, followupText: follow3, marker: follow3, dueAt: due72 });
+    }
+  }
+
+  const patients = await googleSheetsService.getAllPatients();
+  for (const item of patients) {
+    const row = item.data || [];
+    const timeDate = safeDate(row[11]);
+    if (!timeDate) continue;
+    if (!shouldSendByValue(row[19] || "Yes")) continue;
+
+    const type1Flag = String(row[14] || "").toLowerCase() === "yes";
+    const hasOthers = Boolean(row[13]);
+    const followups = row[12] || "";
+    const due24 = new Date(timeDate.getTime() + 24 * 60 * 60 * 1000);
+    const due48 = new Date(timeDate.getTime() + 48 * 60 * 60 * 1000);
+    const due72 = new Date(timeDate.getTime() + 72 * 60 * 60 * 1000);
+
+    const pack = hasOthers
+      ? getOtherFollowupPack()
+      : type1Flag
+        ? getType1FollowupPack()
+        : getType2FollowupPack();
+
+    if (!hasFollowup(followups, pack.follow1) && now >= due24.getTime()) {
+      await sendDueFollowup({
+        flow: "patient",
+        rowData: row,
+        followupText: pack.follow1,
+        marker: pack.follow1,
+        dueAt: due24,
+      });
+    }
+    if (!hasFollowup(followups, pack.follow2) && now >= due48.getTime()) {
+      await sendDueFollowup({
+        flow: "patient",
+        rowData: row,
+        followupText: pack.follow2,
+        marker: pack.follow2,
+        dueAt: due48,
+      });
+    }
+    if (!hasFollowup(followups, pack.follow3) && now >= due72.getTime()) {
+      await sendDueFollowup({
+        flow: "patient",
+        rowData: row,
+        followupText: pack.follow3,
+        marker: pack.follow3,
+        dueAt: due72,
+      });
+    }
+  }
+};
+
+let followupWorkerStarted = false;
+exports.startFollowupRecoveryWorker = () => {
+  if (followupWorkerStarted) return;
+  followupWorkerStarted = true;
+
+  recoverDueFollowups().catch((err) => {
+    console.error("❌ Follow-up recovery error:", err.message);
+  });
+
+  setInterval(() => {
+    recoverDueFollowups().catch((err) => {
+      console.error("❌ Follow-up recovery error:", err.message);
+    });
+  }, 60 * 1000);
+};
 
 const loadExisting = async (session, userId) => {
   const student = await googleSheetsService.getStudentById({ id: userId });
